@@ -1,0 +1,23 @@
+# Binaries
+bin/
+*.o
+*.elf
+*.hex
+*.axf
+
+# npm run preparation before build
+firmware/
+
+# Dependencies
+libraries/simavr/
+libraries/protoduino/
+
+node_modules/
+
+# VSCode
+.vscode/
+!.vscode/c_cpp_properties.json
+
+# Build artifacts
+build/
+.pio/
