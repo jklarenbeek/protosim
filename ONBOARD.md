@@ -19,6 +19,24 @@ If you're new to Ubuntu:
 
 Open a terminal in Ubuntu (Ctrl+Alt+T) for all commands below. Use `sudo` for admin privileges—enter your password when prompted.
 
+### Quick Install
+
+If you are running a fresh Ubuntu or Fedora installation, you can run our automated setup script to install all dependencies (AVR toolchain, Node.js via NVM, PlatformIO, and simavr) in one go.
+
+**For Ubuntu:**
+```bash
+wget -qO- https://raw.githubusercontent.com/jklarenbeek/protosim/main/scripts/setup-ubuntu-env.sh | bash
+source ~/.bashrc
+```
+
+**For Fedora:**
+```bash
+wget -qO- https://raw.githubusercontent.com/jklarenbeek/protosim/main/scripts/setup-fedora-env.sh | bash
+source ~/.bashrc
+```
+
+*(Note: If you have already cloned the repository, you can run `./scripts/setup-ubuntu-env.sh` or `./scripts/setup-fedora-env.sh` directly from the project root).*
+
 ### Step 1: Update Your System and Install Basic Tools
 These are essential for building software from source and managing dependencies.
 

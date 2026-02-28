@@ -9,8 +9,8 @@ bin/
 firmware/
 
 # Dependencies
-libraries/simavr/
-libraries/protoduino/
+# libraries/simavr/
+# libraries/protoduino/
 
 node_modules/
 

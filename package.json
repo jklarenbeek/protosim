@@ -6,7 +6,7 @@
     "setup": "./scripts/setup-simavr.sh && ./scripts/setup-protoduino.sh",
     "build": "make",
     "clean": "make clean",
-    "firmware:uart_echo": "mkdir -p firmware/uart_echo && cp examples/uart_echo/*.c firmware/uart_echo/ && ../.venv/bin/pio run -e uart_echo",
+    "firmware:uart_echo": "mkdir -p firmware/uart_echo && cp examples/uart_echo/*.c firmware/uart_echo/ && pio run -e uart_echo",
     "example:uart_echo": "npm run firmware:uart_echo && ./bin/protosim .pio/build/uart_echo/firmware.hex"
   },
   "keywords": [

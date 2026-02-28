@@ -2,7 +2,7 @@
 
 CC = gcc
 CFLAGS = -Wall -O2 -I./include -I./libraries/simavr/simavr/sim -I./libraries/simavr/simavr/sim/avr
-LDFLAGS = ./libraries/simavr/simavr/obj-x86_64-linux-gnu/libsimavr.a -lpthread
+LDFLAGS = ./libraries/simavr/simavr/obj-x86_64-linux-gnu/libsimavr.a -lpthread -lelf
 
 TARGET = bin/protosim
 SRCS = src/protosim.c src/uart_pty.c
