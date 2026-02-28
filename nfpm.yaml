@@ -1,0 +1,17 @@
+name: "protosim"
+arch: "amd64"
+platform: "linux"
+version: "${VERSION}"
+section: "default"
+priority: "extra"
+maintainer: "Joham <jklarenbeek@gmail.com>"
+description: "The No-Hardware AVR Emulator for Protoduino with Cycle-Exact Profiling and LLM-Native Debugging"
+vendor: "Joham"
+license: "MIT"
+contents:
+  - src: ./bin/protosim
+    dst: /usr/bin/protosim
+  - src: ./mcp-server/dist/index.js
+    dst: /usr/lib/protosim/mcp/index.js
+  - src: ./scripts/protosim-mcp.sh
+    dst: /usr/bin/protosim-mcp

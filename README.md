@@ -123,6 +123,7 @@ protosim/
 ├── src/
 │   ├── protosim.c       # Simulator runner + all debug and profiling tools
 │   └── uart_pty.c       # PTY bridge implementation
+├── mcp-server/          # Model Context Protocol (MCP) server implementation
 ├── include/
 │   └── uart_pty.h
 ├── examples/
@@ -1010,6 +1011,32 @@ The symlink `/tmp/simavr-uart0` is recreated each time protosim starts. Only one
 
 ---
 
+## Using the MCP Server
+
+protosim includes a **Model Context Protocol (MCP) Server** specifically built to enable autonomous AI agents (like Claude, Cursor, and Windsurf) to write, compile, execute, and profile Arduino code entirely on their own, without needing a physical board.
+
+By connecting an AI assistant to the protosim MCP server, it gains three powerful capabilities:
+1. **`init_arduino_project`** — Scaffolds a new PlatformIO-based Arduino project.
+2. **`compile_firmware`** — Builds the C/C++ firmware into a simulation-ready `.elf` artifact.
+3. **`run_simulation`** — Runs the firmware in the emulator and parses the cycle-exact metrics, coverage, call graphs, and debugging output into structured JSON for the agent.
+
+### Starting the MCP Server
+
+The server is distributed as a bundled script inside the system packages, or you can run it from the repository:
+
+```bash
+# Using the installed command (if installed via deb/rpm/pacman):
+protosim-mcp
+
+# Or directly from the repository:
+cd mcp-server && npm install && npm run build
+node build/index.js
+```
+
+Configure your MCP-compatible client (e.g., Cursor, Claude Desktop) to start the server by pointing it to the `protosim-mcp` binary or the `index.js` file. The server communicates via standard IO (stdio).
+
+---
+
 ## Architecture Deep Dive
 
 ### How the simulation works
@@ -1103,7 +1130,7 @@ The project includes IntelliSense configuration. Open the folder to get autocomp
 
 ### Using Protoduino (cooperative multitasking)
 
-Protoduino wraps the [protothreads](http://dunkels.com/adam/pt/) pattern for AVR:
+Protoduino wraps the [protothreads v2](https://github.com/jklarenbeek/protoduino/blob/main/docs/protothreads.md) pattern for AVR:
 
 ```cpp
 #include <Arduino.h>
