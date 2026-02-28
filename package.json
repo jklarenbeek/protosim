@@ -6,6 +6,7 @@
     "setup": "./scripts/setup-simavr.sh && ./scripts/setup-protoduino.sh",
     "build": "make",
     "clean": "make clean",
+    "deploy": "git push origin main && git push origin --tags",
     "firmware:uart_echo": "mkdir -p firmware/uart_echo && cp examples/uart_echo/*.c firmware/uart_echo/ && pio run -e uart_echo",
     "example:uart_echo": "npm run firmware:uart_echo && ./bin/protosim .pio/build/uart_echo/firmware.hex"
   },
