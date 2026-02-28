@@ -8,7 +8,11 @@
     "clean": "make clean",
     "deploy": "git push origin main && git push origin --tags",
     "firmware:uart_echo": "mkdir -p firmware/uart_echo && cp examples/uart_echo/*.c firmware/uart_echo/ && pio run -e uart_echo",
-    "example:uart_echo": "npm run firmware:uart_echo && ./bin/protosim .pio/build/uart_echo/firmware.hex"
+    "example:uart_echo": "npm run firmware:uart_echo && ./bin/protosim .pio/build/uart_echo/firmware.hex",
+    "package:ubuntu": "mkdir -p dist && VERSION=${npm_package_version} nfpm package -f packaging/nfpm.yaml --packager deb --target dist/protosim_${npm_package_version}_amd64.deb",
+    "package:fedora": "mkdir -p dist && VERSION=${npm_package_version} nfpm package -f packaging/nfpm.yaml --packager rpm --target dist/protosim-${npm_package_version}.x86_64.rpm",
+    "package:arch": "mkdir -p dist && VERSION=${npm_package_version} nfpm package -f packaging/nfpm.yaml --packager archlinux --target dist/protosim-${npm_package_version}-x86_64.pkg.tar.zst",
+    "package": "npm run package:ubuntu && npm run package:fedora && npm run package:arch"
   },
   "keywords": [
     "avr",
