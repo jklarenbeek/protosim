@@ -1,6 +1,6 @@
 {
   "name": "protosim",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "AVR Simulator with PTY Support",
   "scripts": {
     "setup": "./scripts/setup-simavr.sh && ./scripts/setup-protoduino.sh",
