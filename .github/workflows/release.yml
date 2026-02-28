@@ -1,9 +1,14 @@
-name: Release
+name: Build and Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*' # Trigger on version tags e.g., v1.0.0
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
@@ -25,6 +30,20 @@ jobs:
     - name: Install build dependencies (C)
       run: sudo apt-get update && sudo apt-get install -y gcc make libelf-dev
 
+    - name: Set Version
+      id: set_version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/v* ]]; then
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        else
+          echo "VERSION=0.0.0-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        fi
+
+    - name: Bump package versions
+      run: |
+        npm version ${{ env.VERSION }} --no-git-tag-version --allow-same-version
+        cd mcp-server && npm version ${{ env.VERSION }} --no-git-tag-version --allow-same-version
+
     - name: Setup and Build protosim
       run: |
         npm install
@@ -37,10 +56,6 @@ jobs:
         npm install
         npx esbuild src/index.ts --bundle --platform=node --format=esm --external:child_process --external:util --external:fs --external:path --external:url --outfile=dist/index.js
 
-    - name: Set Version
-      id: set_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
     - name: Package with nFPM
       run: |
         echo "Installing nFPM..."
@@ -48,16 +63,22 @@ jobs:
         sudo mv /tmp/nfpm /usr/local/bin/
         
         echo "Packaging..."
-        nfpm package --packager deb --target ./protosim_${{ env.VERSION }}_amd64.deb
-        nfpm package --packager rpm --target ./protosim-${{ env.VERSION }}.x86_64.rpm
-        nfpm package --packager archlinux --target ./protosim-${{ env.VERSION }}-x86_64.pkg.tar.zst
+        mkdir -p dist
+        nfpm package -f packaging/nfpm.yaml --packager deb --target ./dist/protosim_${{ env.VERSION }}_amd64.deb
+        nfpm package -f packaging/nfpm.yaml --packager rpm --target ./dist/protosim-${{ env.VERSION }}.x86_64.rpm
+        nfpm package -f packaging/nfpm.yaml --packager archlinux --target ./dist/protosim-${{ env.VERSION }}-x86_64.pkg.tar.zst
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: protosim-packages
+        path: dist/
+        retention-days: 7
 
     - name: Release
+      if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v2
       with:
-        files: |
-          ./protosim_${{ env.VERSION }}_amd64.deb
-          ./protosim-${{ env.VERSION }}.x86_64.rpm
-          ./protosim-${{ env.VERSION }}-x86_64.pkg.tar.zst
+        files: dist/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1022,18 +1022,54 @@ By connecting an AI assistant to the protosim MCP server, it gains three powerfu
 
 ### Starting the MCP Server
 
-The server is distributed as a bundled script inside the system packages, or you can run it from the repository:
+The most reliable way to use the MCP server is to install the pre-compiled system package for your OS. The package bundles both the `protosim` executable and the `protosim-mcp` wrapper script.
 
-```bash
-# Using the installed command (if installed via deb/rpm/pacman):
-protosim-mcp
+#### 1. Install the System Package
 
-# Or directly from the repository:
-cd mcp-server && npm install && npm run build
-node build/index.js
+Download the appropriate package for your OS from the [GitHub Releases page](https://github.com/jklarenbeek/protosim/releases) and install it:
+
+- **Ubuntu / Debian (`.deb`)**:
+  ```bash
+  sudo dpkg -i protosim_<version>_amd64.deb
+  ```
+- **Fedora / RHEL (`.rpm`)**:
+  ```bash
+  sudo rpm -i protosim-<version>.x86_64.rpm
+  ```
+- **Arch Linux (`.pkg.tar.zst`)**:
+  ```bash
+  sudo pacman -U protosim-<version>-x86_64.pkg.tar.zst
+  ```
+
+#### 2. Configure Your AI Agent
+
+Once installed, the `protosim-mcp` command is available globally. Configure your MCP-compatible client (e.g., Cursor, Claude Desktop, openclaw.ai) by pointing it to this command. 
+
+For most agents, you add this to their configuration file (like `mcp.json` or `config.json`):
+
+```json
+{
+  "mcpServers": {
+    "protosim": {
+      "command": "protosim-mcp",
+      "args": []
+    }
+  }
+}
 ```
 
-Configure your MCP-compatible client (e.g., Cursor, Claude Desktop) to start the server by pointing it to the `protosim-mcp` binary or the `index.js` file. The server communicates via standard IO (stdio).
+*Note: The server communicates via standard IO (stdio). The JS server requires Node.js (v18+) to be installed on your system.*
+
+#### (Alternative) Running from Source
+
+If you prefer not to install the system packages, you can run the MCP server directly from the repository after building protosim:
+
+```bash
+cd mcp-server
+npm install
+npm run build
+node build/index.js
+```
 
 ---
 
