@@ -11,7 +11,7 @@ echo "1. Updating system package lists..."
 sudo apt update
 
 echo "2. Installing essential build tools and AVR toolchain..."
-sudo apt install -y git gcc make build-essential \
+sudo apt install -y git gcc make libelf-dev build-essential \
   gcc-avr binutils-avr avr-libc gdb-avr avrdude \
   simavr picocom python3 python3-pip python3-venv curl
 
@@ -20,7 +20,7 @@ export NVM_DIR="$HOME/.nvm"
 if [ ! -d "$NVM_DIR" ]; then
     echo "Downloading and installing NVM..."
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-    
+
     # Load nvm
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 else
@@ -38,7 +38,7 @@ if [ ! -d "$HOME/.platformio" ]; then
     curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o /tmp/get-platformio.py
     python3 /tmp/get-platformio.py
     rm /tmp/get-platformio.py
-    
+
     # Adding PlatformIO to PATH in .bashrc if not present
     if ! grep -q "\.platformio/penv/bin" ~/.bashrc; then
         echo -e '\n# PlatformIO Path' >> ~/.bashrc

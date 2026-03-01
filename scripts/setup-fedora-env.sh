@@ -11,14 +11,14 @@ echo "1. Updating system package lists..."
 sudo dnf update -y
 
 echo "2. Installing essential build tools and AVR toolchain..."
-sudo dnf install -y git gcc gcc-c++ make avr-gcc avr-binutils avr-libc avr-gdb avrdude simavr picocom python3 python3-pip curl
+sudo dnf install -y git gcc gcc-c++ make libelf-dev avr-gcc avr-binutils avr-libc avr-gdb avrdude simavr picocom python3 python3-pip curl
 
 echo "3. Installing NVM and Node.js..."
 export NVM_DIR="$HOME/.nvm"
 if [ ! -d "$NVM_DIR" ]; then
     echo "Downloading and installing NVM..."
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-    
+
     # Load nvm
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 else
@@ -36,7 +36,7 @@ if [ ! -d "$HOME/.platformio" ]; then
     curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core-installer/master/get-platformio.py -o /tmp/get-platformio.py
     python3 /tmp/get-platformio.py
     rm /tmp/get-platformio.py
-    
+
     # Adding PlatformIO to PATH in .bashrc if not present
     if ! grep -q "\.platformio/penv/bin" ~/.bashrc; then
         echo -e '\n# PlatformIO Path' >> ~/.bashrc

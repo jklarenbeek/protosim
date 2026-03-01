@@ -1,3 +1,7 @@
 [submodule "libraries/protoduino"]
 	path = libraries/protoduino
 	url = https://github.com/jklarenbeek/protoduino.git
+
+[submodule "libraries/simavr"]
+	path = libraries/simavr
+	url = https://github.com/buserror/simavr.git
