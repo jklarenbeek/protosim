@@ -16,21 +16,25 @@ sudo apt install -y git gcc make libelf-dev build-essential \
   simavr picocom python3 python3-pip python3-venv curl
 
 echo "3. Installing NVM and Node.js..."
-export NVM_DIR="$HOME/.nvm"
-if [ ! -d "$NVM_DIR" ]; then
-    echo "Downloading and installing NVM..."
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-
-    # Load nvm
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    echo "Node.js and npm are already installed. Skipping NVM installation."
 else
-    echo "NVM is already installed."
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-fi
+    export NVM_DIR="$HOME/.nvm"
+    if [ ! -d "$NVM_DIR" ]; then
+        echo "Downloading and installing NVM..."
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 
-echo "Installing Latest LTS Node.js..."
-nvm install --lts
-nvm use --lts
+        # Load nvm
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    else
+        echo "NVM is already installed."
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    fi
+
+    echo "Installing Latest LTS Node.js..."
+    nvm install --lts
+    nvm use --lts
+fi
 
 echo "4. Installing PlatformIO CLI..."
 if [ ! -d "$HOME/.platformio" ]; then

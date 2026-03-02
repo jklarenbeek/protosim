@@ -18,9 +18,15 @@
       --profile-out <file>   Write profiling reports to file (default: stdout)
  */
 
+#ifdef _WIN32
+/* Tell win32_compat.h that this is protosim (not a simavr file) */
+#define PROTOSIM_BUILD 1
+/* win32_compat.h provides basename() — no libgen.h needed on Windows */
+#else
+#include <libgen.h>
+#endif
 #include <ctype.h>
 #include <fcntl.h>
-#include <libgen.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -34,7 +40,11 @@
 #include "sim_elf.h"
 #include "sim_gdb.h"
 #include "sim_hex.h"
+#ifdef _WIN32
+#include "uart_com.h"
+#else
 #include "uart_pty.h"
+#endif
 
 /* ═══════════════════════════════════════════════════════════════
    Constants
@@ -153,7 +163,11 @@ static int n_cg_edges = 0;
 static call_frame_t call_stack[MAX_CALL_DEPTH];
 static int call_depth = 0;
 
+#ifdef _WIN32
+uart_com_t uart_com;
+#else
 uart_pty_t uart_pty;
+#endif
 avr_t *avr = NULL;
 
 /* ═══════════════════════════════════════════════════════════════
@@ -409,7 +423,8 @@ static void profiling_step(uint32_t pre_pc, uint64_t pre_cycle,
     }
   } else if (callee_fi != pc_to_func(pre_pc)) {
     /* We changed functions without a CALL or RET */
-    if (callee_fi >= 0 && strcmp(func_table[callee_fi].name, "__vectors") == 0) {
+    if (callee_fi >= 0 &&
+        strcmp(func_table[callee_fi].name, "__vectors") == 0) {
       /* Interrupt vectoring! PUSH frame */
       if (call_depth < MAX_CALL_DEPTH) {
         call_frame_t *fr = &call_stack[call_depth++];
@@ -421,7 +436,8 @@ static void profiling_step(uint32_t pre_pc, uint64_t pre_cycle,
       }
     } else if (call_depth > 0) {
       /* Tail call, or JMP from __vectors to an ISR. Replace current frame. */
-      call_stack[call_depth - 1].func_idx = (callee_fi >= 0) ? (uint32_t)callee_fi : UINT32_MAX;
+      call_stack[call_depth - 1].func_idx =
+          (callee_fi >= 0) ? (uint32_t)callee_fi : UINT32_MAX;
       if (callee_fi >= 0)
         func_table[callee_fi].call_count++;
     }
@@ -479,7 +495,8 @@ static void finalize_call_stack(uint64_t post_cycle) {
         edge->total_cycles = 0;
       }
       if (edge) {
-        // We don't increment call_count here because it was already incremented on push
+        // We don't increment call_count here because it was already incremented
+        // on push
         edge->total_cycles += frame_cycles;
       }
     }
@@ -747,7 +764,8 @@ static void report_callgraph(FILE *out, uint64_t total_cycles, uint32_t freq) {
       }
     }
 
-    if (func_table[fi].total_cycles == 0 && func_table[fi].call_count == 0 && !has_outgoing)
+    if (func_table[fi].total_cycles == 0 && func_table[fi].call_count == 0 &&
+        !has_outgoing)
       continue;
 
     double pct =
@@ -1059,9 +1077,14 @@ int main(int argc, char *argv[]) {
            opt_coverage, opt_profile, opt_callgraph, n_funcs);
   }
 
-  /* ── PTY UART ────────────────────────────────────────────── */
+  /* ── PTY/COM UART ────────────────────────────────────────────── */
+#ifdef _WIN32
+  uart_com_init(avr, &uart_com);
+  uart_com_connect(&uart_com, '0');
+#else
   uart_pty_init(avr, &uart_pty);
   uart_pty_connect(&uart_pty, '0');
+#endif
 
   printf("protosim running %s on %s at %u Hz\n", filename, mmcu,
          (unsigned)freq);
