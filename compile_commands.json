@@ -1,0 +1,290 @@
+[
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\CDC.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\CDC.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\CDC.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\CDC.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial0.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial0.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial0.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial0.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial1.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial1.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial1.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial1.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial2.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial2.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial2.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial2.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial3.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial3.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\HardwareSerial3.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\HardwareSerial3.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\IPAddress.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\IPAddress.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\IPAddress.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\IPAddress.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\PluggableUSB.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\PluggableUSB.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\PluggableUSB.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\PluggableUSB.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\Print.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\Print.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\Print.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\Print.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\Stream.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\Stream.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\Stream.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\Stream.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\Tone.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\Tone.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\Tone.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\Tone.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\USBCore.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\USBCore.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\USBCore.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\USBCore.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\WInterrupts.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\WInterrupts.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\WInterrupts.c",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\WInterrupts.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\WMath.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\WMath.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\WMath.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\WMath.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\WString.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\WString.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\WString.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\WString.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\abi.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\abi.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\abi.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\abi.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\hooks.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\hooks.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\hooks.c",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\hooks.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\main.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\main.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\main.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\main.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\new.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\new.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\new.cpp",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\new.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\wiring.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring.c",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\wiring.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\wiring_analog.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_analog.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_analog.c",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\wiring_analog.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\wiring_digital.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_digital.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_digital.c",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\wiring_digital.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -mmcu=atmega328p -x assembler-with-cpp -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard -c -o .pio\\build\\uart_echo\\FrameworkArduino\\wiring_pulse.S.o C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_pulse.S",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_pulse.S",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\wiring_pulse.S.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\wiring_pulse.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_pulse.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_pulse.c",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\wiring_pulse.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\FrameworkArduino\\wiring_shift.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_shift.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino\\wiring_shift.c",
+        "output": ".pio\\build\\uart_echo\\FrameworkArduino\\wiring_shift.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart0.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\cpu\\avr\\uart0.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\cpu\\avr\\uart0.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart0.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart1.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\cpu\\avr\\uart1.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\cpu\\avr\\uart1.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart1.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart2.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\cpu\\avr\\uart2.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\cpu\\avr\\uart2.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart2.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart3.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\cpu\\avr\\uart3.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\cpu\\avr\\uart3.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\cpu\\avr\\uart3.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\dbg\\errors.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\dbg\\errors.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\dbg\\errors.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\dbg\\errors.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\dbg\\print.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\dbg\\print.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\dbg\\print.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\dbg\\print.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\quicksort8.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\lib\\quicksort8.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\lib\\quicksort8.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\quicksort8.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\ringb8.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\lib\\ringb8.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\lib\\ringb8.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\ringb8.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\rune16.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\lib\\utf\\rune16.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\lib\\utf\\rune16.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\rune16.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-g++.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\utf8-stream.cpp.o -c -fno-exceptions -fno-threadsafe-statics -fpermissive -std=gnu++11 -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\lib\\utf\\utf8-stream.cpp",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\lib\\utf\\utf8-stream.cpp",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\utf8-stream.cpp.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\utf8.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\lib\\utf\\utf8.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\lib\\utf\\utf8.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\utf8.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\vt100.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\lib\\utf\\vt100.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\lib\\utf\\vt100.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\lib\\utf\\vt100.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\main.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\main.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\main.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\main.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\ipc.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\ipc.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\ipc.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\ipc.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\mem.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\mem.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\mem.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\mem.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\process.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\process.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\process.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\process.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\process\\logger.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\process\\logger.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\process\\logger.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\process\\logger.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\process\\pipelines.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\process\\pipelines.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\process\\pipelines.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\process\\pipelines.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\serial.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\serial.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial0.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\serial\\serial0.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\serial\\serial0.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial0.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial1.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\serial\\serial1.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\serial\\serial1.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial1.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial2.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\serial\\serial2.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\serial\\serial2.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial2.c.o"
+    },
+    {
+        "command": "C:\\Users\\bitSOCIAL\\.platformio\\packages\\toolchain-atmelavr\\bin\\avr-gcc.exe -o .pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial3.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega328p -Os -Wall -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60119 -DARDUINO_AVR_UNO -DF_CPU=16000000UL -DF_CPU=16000000L -DARDUINO_ARCH_AVR -DARDUINO=10808 -Ilibraries\\protoduino\\src -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\cores\\arduino -IC:\\Users\\bitSOCIAL\\.platformio\\packages\\framework-arduino-avr\\variants\\standard libraries\\protoduino\\src\\sys\\serial\\serial3.c",
+        "directory": "C:\\Users\\bitSOCIAL\\GitHub\\protosim",
+        "file": "libraries\\protoduino\\src\\sys\\serial\\serial3.c",
+        "output": ".pio\\build\\uart_echo\\libcf2\\protoduino\\sys\\serial\\serial3.c.o"
+    }
+]

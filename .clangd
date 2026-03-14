@@ -1,0 +1,10 @@
+CompileFlags:
+  CompilationDatabase: bin
+  Add: [-std=gnu99, -Ilibraries/simavr/simavr/sim, -Ilibraries/protoduino/src]
+  Remove: [-W*, -mmcu=*, -DF_CPU=*]   # ignore the ones it doesn't like
+
+Diagnostics:
+  ClangTidy:
+    CheckOptions:
+      readability-identifier-naming: 0
+  UnusedIncludes: None

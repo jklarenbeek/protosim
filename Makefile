@@ -4,7 +4,7 @@ CC = gcc
 CFLAGS = -Wall -O2 -I./include -I./libraries/simavr/simavr/sim -I./libraries/simavr/simavr/sim/avr
 
 ifeq ($(OS),Windows_NT)
-    SRCS = src/protosim.c src/uart_com.c
+    SRCS = src/protosim.c src/uart_com.c src/stk500_uploader.c
     # Windows build: inject win32_compat.h into every compile unit (-include)
     # and link against libsimavr.a built by build-simavr-win.bat
     CFLAGS += -include ./include/win32_compat.h \
@@ -19,7 +19,7 @@ ifeq ($(OS),Windows_NT)
               -LC:/Tools/msys64/ucrt64/lib
     TARGET = bin/protosim.exe
 else
-    SRCS = src/protosim.c src/uart_pty.c
+    SRCS = src/protosim.c src/uart_pty.c src/stk500_uploader.c
     LDFLAGS = ./libraries/simavr/simavr/obj-x86_64-linux-gnu/libsimavr.a -lpthread -lelf
     TARGET = bin/protosim
 endif
@@ -63,4 +63,11 @@ else
 	@echo "Cleanup complete."
 endif
 
-.PHONY: all clean check_lib
+.PHONY: all clean check_lib compiledb
+
+compiledb:
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File scripts\generate_compdb.ps1
+else
+	bash scripts/generate_compdb.sh
+endif
