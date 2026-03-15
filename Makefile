@@ -31,7 +31,11 @@ OBJS = $(SRCS:.c=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJS) check_lib
-	@if not exist bin mkdir bin 2>nul || mkdir -p bin 2>/dev/null; true
+ifeq ($(OS),Windows_NT)
+	if not exist bin mkdir bin
+else
+	mkdir -p bin
+endif
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
 ifeq ($(OS),Windows_NT)

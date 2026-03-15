@@ -3,10 +3,15 @@ set -e
 
 SIMAVR_DIR="libraries/simavr"
 
-if [ ! -d "$SIMAVR_DIR" ]; then
-    echo "Cloning simavr..."
-    mkdir -p libraries
-    git submodule add https://github.com/buserror/simavr.git "$SIMAVR_DIR"
+if [ ! -f "$SIMAVR_DIR/simavr/sim/sim_avr.h" ]; then
+    echo "simavr not found or incomplete, initializing submodules..."
+    git submodule update --init --recursive "$SIMAVR_DIR" || true
+    if [ ! -f "$SIMAVR_DIR/simavr/sim/sim_avr.h" ]; then
+        echo "Still not found, attempting clone..."
+        mkdir -p libraries
+        rm -rf "$SIMAVR_DIR"
+        git clone https://github.com/buserror/simavr.git "$SIMAVR_DIR"
+    fi
 fi
 
 echo "Building simavr..."
