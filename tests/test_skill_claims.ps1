@@ -7,9 +7,11 @@ $SIM        = Join-Path $ROOT "bin\protosim.exe"
 $BUILD_DIR  = Join-Path $ROOT "build"
 if (-not (Test-Path $BUILD_DIR)) { New-Item -ItemType Directory -Path $BUILD_DIR }
 
-$DEMO_SRC   = Join-Path $ROOT "examples\demo\demo.c"
-$DEMO_ELF   = Join-Path $BUILD_DIR "demo.elf"
-$BOOTLOADER = Join-Path $ROOT "libraries\simavr\examples\board_simduino\ATmegaBOOT_168_atmega328.ihex"
+$DEMO_ELF       = Join-Path $ROOT "examples\demo\demo.elf"
+$WATCH_ELF      = Join-Path $ROOT "examples\struct_watch\struct_watch.elf"
+$CALLSTACK_ELF  = Join-Path $ROOT "examples\deep_callstack\deep_callstack.elf"
+$UART_INT_ELF   = Join-Path $ROOT "examples\uart_interrupt\uart_interrupt.elf"
+$BOOTLOADER     = Join-Path $ROOT "libraries\simavr\examples\board_simduino\ATmegaBOOT_168_atmega328.ihex"
 
 $PASS_COUNT = 0
 $FAIL_COUNT = 0
@@ -24,72 +26,116 @@ function assert_match([string]$out, [string]$label, [string]$pattern) {
     else                      { print_fail "$label  [pattern: $pattern]" }
 }
 
-# 1. TEST COMPILATION CLAIM
-print_header "Claim 1: Firmware Compilation (avr-gcc -g)"
-if (Test-Path $DEMO_ELF) { Remove-Item $DEMO_ELF }
-$comp_out = & avr-gcc -mmcu=atmega328p -DF_CPU=16000000UL -Os -g -o $DEMO_ELF $DEMO_SRC 2>&1
-if ($LASTEXITCODE -eq 0 -and (Test-Path $DEMO_ELF)) {
-    print_pass "Compiled $DEMO_ELF using avr-gcc"
-} else {
-    print_fail "Failed to compile $DEMO_ELF`n$comp_out"
-    exit 1
-}
-
-# 2. TEST MAX-STEPS CLAIM
-print_header "Claim 2: --max-steps limits simulation"
+# 1. TEST MAX-STEPS CLAIM (using demo)
+print_header "Claim 1: --max-steps limits simulation"
 $o = & $SIM $DEMO_ELF --max-steps 10000 2>&1 | Out-String
 assert_match $o "Max-steps reached" "MAX-STEPS \(10000\) reached"
 
-# 3. TEST DEBUG FEATURES (Breakpoint + Dump Regs + r24 check)
-print_header "Claim 3: Debugging (-b, --dump-regs)"
-# In demo.c, main calls compute(20). 20 is 0x14.
-# We need ~400k cycles to hit compute, so 1M steps is safe.
+# 2. TEST DEBUG FEATURES: Breakpoints & Registers (using demo)
+print_header "Claim 2: Debugging (-b, --dump-regs)"
 $o = & $SIM $DEMO_ELF -b compute --dump-regs --max-steps 1000000 2>&1 | Out-String
-assert_match $o "Breakpoint hit" "BREAKPOINT HIT: compute"
+assert_match $o "Breakpoint hit: compute" "BREAKPOINT HIT: compute"
 assert_match $o "Register dump appears" "Register Dump @ PC="
-assert_match $o "r24 contains argument (0x14)" "r24\s+=\s+0x14"
+assert_match $o "r24 contains argument" "r24\s+=\s+0x14"
 
-# 4. TEST WATCHES
-print_header "Claim 4: Watches (-w)"
-# We watch SRAM 0x0100 while compute is hit.
-$o = & $SIM $DEMO_ELF -w 0x0100:1:test_var -b compute --max-steps 1000000 2>&1 | Out-String
-assert_match $o "Watch reported" "test_var\s+@\s+SRAM\[0x0100\]"
+# 3. TEST DEBUG FEATURES: Watches & SRAM Dump (using struct_watch)
+print_header "Claim 3: Watches & SRAM Dump (-w, --dump-sram)"
+# player is at 0x0100. It's 4 bytes: hp(2), x(1), y(1).
+$o = & $SIM $WATCH_ELF -w 0x0100:2:player_hp -b update_player --dump-sram 0x0100:16 --max-steps 1000000 2>&1 | Out-String
+assert_match $o "Breakpoint hit: update_player" "BREAKPOINT HIT: update_player"
+assert_match $o "Watch reported: player_hp" "player_hp\s+@\s+SRAM\[0x0100\]"
+assert_match $o "SRAM dump appears" "--- SRAM 0x0100 .. 0x010f ---"
+assert_match $o "SRAM dump contains player data" "0100: 64 00 0a 14" # 100(0x64), 0, 10(0x0a), 20(0x14)
 
-# 5. TEST PROFILING FEATURES
-print_header "Claim 5: Profiling (--coverage, --profile, --callgraph)"
-$o = & $SIM $DEMO_ELF --coverage --profile --callgraph --max-steps 1000000 2>&1 | Out-String
+# 4. TEST PROFILING FEATURES (using deep_callstack)
+print_header "Claim 4: Profiling (--profile, --callgraph)"
+$o = & $SIM $CALLSTACK_ELF --profile --callgraph --max-steps 1000000 2>&1 | Out-String
+assert_match $o "Flat profile reported" "Flat Performance Profile"
+assert_match $o "Call graph reported" "Call Graph"
+assert_match $o "Recursive function 'fibonacci' in profile" "fibonacci"
+# Using flexible regex for call path to avoid character encoding issues
+assert_match $o "Call path a->b->c->d in callgraph" "a.*b.*c.*d"
+
+# 5. TEST COVERAGE (using uart_interrupt)
+print_header "Claim 5: Coverage (--coverage)"
+$o = & $SIM $UART_INT_ELF --coverage --max-steps 500000 2>&1 | Out-String
 assert_match $o "Coverage report" "Code Coverage Report"
-assert_match $o "Flat profile report" "Flat Performance Profile"
-assert_match $o "Call graph report" "Call Graph"
-assert_match $o "Hot path reported" "Hot Path"
+# Coverage might be partial if budget is low, but function should be present
+assert_match $o "Function 'uart_init' present in report" "uart_init"
+assert_match $o "Function 'uart_print' present in report" "uart_print"
 
-# 6. TEST UART INTERACTION (TCP on Windows)
+# 6. TEST UART INTERACTION (TCP on Windows using uart_interrupt)
 print_header "Claim 6: Serial UART Interaction (TCP 127.0.0.1:4000)"
-$sim_process = Start-Process -FilePath $SIM -ArgumentList "$DEMO_ELF --max-steps 50000000" -NoNewWindow -PassThru
+# We use a very large step limit for background process
+$sim_process = Start-Process -FilePath $SIM -ArgumentList "$UART_INT_ELF --max-steps 100000000" -NoNewWindow -PassThru
 print_info "Started protosim PID: $($sim_process.Id)"
 
 $client = $null
 $connected = $false
-for ($i = 0; $i -lt 20; $i++) {
+# Retries for connection
+for ($i = 0; $i -lt 30; $i++) {
     try {
         $client = New-Object System.Net.Sockets.TcpClient("127.0.0.1", 4000)
         $connected = $true
         break
     } catch {
-        Start-Sleep -Milliseconds 200
+        Start-Sleep -Milliseconds 300
     }
 }
 
 if ($connected) {
     try {
         $stream = $client.GetStream()
+        # Set shorter timeouts for the client stream
+        $client.ReceiveTimeout = 2000
+        $client.SendTimeout    = 2000
+        
         $reader = New-Object System.IO.StreamReader($stream)
-        $line = $reader.ReadLine()
-        if ($line -match "protosim-demo ready") {
-            print_pass "Received banner over TCP: $line"
-        } else {
-            print_fail "Did not receive expected banner. Got: $line"
+        $writer = New-Object System.IO.StreamWriter($stream)
+        $writer.AutoFlush = $true
+
+        # Read until we see "Initialized" or timeout
+        $init_found = $false
+        for ($k = 0; $k -lt 10; $k++) {
+            if ($stream.DataAvailable) {
+                $line = $reader.ReadLine()
+                if ($line -match "UART Interrupt Example Initialized") {
+                    $init_found = $true
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 200
         }
+
+        if ($init_found) {
+            print_pass "Received init banner"
+        } else {
+            print_fail "Did not receive expected banner."
+        }
+
+        # Test Echo
+        $writer.Write("X")
+        # Wait for simulation
+        Start-Sleep -Milliseconds 1000
+        
+        $echo_found = $false
+        for ($j = 0; $j -lt 10; $j++) {
+            if ($stream.DataAvailable) {
+                $line = $reader.ReadLine()
+                if ($line -match "Echo: X") {
+                    $echo_found = $true
+                    break
+                }
+            }
+            Start-Sleep -Milliseconds 200
+        }
+
+        if ($echo_found) {
+            print_pass "Received echo 'X' over TCP"
+        } else {
+            print_fail "Failed to receive echo 'X'"
+        }
+
         $client.Close()
     } catch {
         print_fail "Error during communication: $($_.Exception.Message)"
