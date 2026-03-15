@@ -108,9 +108,11 @@ static int stk_send(sock_t fd, const uint8_t *data, int len)
 static int stk_expect_ok(sock_t fd)
 {
     int b = sock_recv_byte(fd, 1000);
-    if (b != STK_INSYNC) return -1;
+    if (b < 0) { fprintf(stderr, "[STK] timeout waiting for STK_INSYNC\n"); return -1; }
+    if (b != STK_INSYNC) { fprintf(stderr, "[STK] expected STK_INSYNC (0x14), got 0x%02x\n", b); return -1; }
     b = sock_recv_byte(fd, 1000);
-    if (b != STK_OK) return -1;
+    if (b < 0) { fprintf(stderr, "[STK] timeout waiting for STK_OK\n"); return -1; }
+    if (b != STK_OK) { fprintf(stderr, "[STK] expected STK_OK (0x10), got 0x%02x\n", b); return -1; }
     return 0;
 }
 
@@ -305,6 +307,8 @@ static void *stk500_upload_thread_fn(void *arg)
         uint32_t byte_addr = (uint32_t)(pg * OPTIBOOT_PAGE_SIZE);
         if (stk_load_address(fd, byte_addr) < 0) goto done;
         if (stk_prog_page(fd, a->binary, a->size, byte_addr) < 0) goto done;
+        /* Small delay to let simavr catch up */
+        sock_sleep_ms(5);
     }
 
     stk_leave_progmode(fd);   /* ignore return; BL may reset immediately */

@@ -3,8 +3,10 @@
 CC = gcc
 CFLAGS = -Wall -O2 -I./include -I./libraries/simavr/simavr/sim -I./libraries/simavr/simavr/sim/avr
 
+COMMON_SRCS = src/stk500_uploader.c src/debug.c src/profiling.c src/ihex_loader.c
+
 ifeq ($(OS),Windows_NT)
-    SRCS = src/protosim.c src/uart_com.c src/stk500_uploader.c
+    SRCS = src/protosim.c src/uart_com.c $(COMMON_SRCS)
     # Windows build: inject win32_compat.h into every compile unit (-include)
     # and link against libsimavr.a built by build-simavr-win.bat
     CFLAGS += -include ./include/win32_compat.h \
@@ -19,7 +21,7 @@ ifeq ($(OS),Windows_NT)
               -LC:/Tools/msys64/ucrt64/lib
     TARGET = bin/protosim.exe
 else
-    SRCS = src/protosim.c src/uart_pty.c src/stk500_uploader.c
+    SRCS = src/protosim.c src/uart_pty.c $(COMMON_SRCS)
     LDFLAGS = ./libraries/simavr/simavr/obj-x86_64-linux-gnu/libsimavr.a -lpthread -lelf
     TARGET = bin/protosim
 endif
