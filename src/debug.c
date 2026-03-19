@@ -153,10 +153,28 @@ void add_sram_dump_arg(const char *arg) {
 }
 
 uint32_t resolve_symbol(elf_firmware_t *f, const char *sym) {
-  if (!f)
-    return UINT32_MAX;
-  for (int i = 0; i < (int)f->symbolcount; i++)
-    if (strcmp(f->symbol[i]->symbol, sym) == 0)
-      return f->symbol[i]->addr;
+  if (!f) return UINT32_MAX;
+  
+  int is_wildcard = (strchr(sym, '*') != NULL);
+  char stripped_sym[128] = {0};
+  
+  if (is_wildcard) {
+    int j = 0;
+    for (int i = 0; sym[i] && j < sizeof(stripped_sym) - 1; i++) {
+      if (sym[i] != '*') stripped_sym[j++] = sym[i];
+    }
+  }
+
+  for (int i = 0; i < (int)f->symbolcount; i++) {
+    if (is_wildcard) {
+      if (strstr(f->symbol[i]->symbol, stripped_sym) != NULL) {
+        return f->symbol[i]->addr;
+      }
+    } else {
+      if (strcmp(f->symbol[i]->symbol, sym) == 0) {
+        return f->symbol[i]->addr;
+      }
+    }
+  }
   return UINT32_MAX;
 }

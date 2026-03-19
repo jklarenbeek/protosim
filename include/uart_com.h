@@ -41,6 +41,7 @@ typedef struct uart_com_t {
 void uart_com_init(struct avr_t * avr, uart_com_t * b);
 void uart_com_stop(uart_com_t * p);
 void uart_com_connect(uart_com_t * p, char uart);
+int uart_com_is_connected(uart_com_t * p);
 
 #endif /* _WIN32 */
 

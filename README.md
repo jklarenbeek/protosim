@@ -113,12 +113,21 @@ protosim <firmware.elf|.hex> [options]
 | Flag | Argument | Effect |
 |------|----------|--------|
 | `--max-steps` | `<n>` | Exit after N `avr_run()` calls. **Always use this** to prevent hanging. |
-| `-b` | `<symbol\|0xaddr>` | Breakpoint — fires every time `avr->pc` equals the address. Repeatable. |
+| `-b` | `<symbol\|0xaddr>` | Breakpoint — fires every time `avr->pc` equals the address. Supports `*` wildcard substring matching for symbols (e.g., `*do_event*`). Repeatable. |
 | `-w` | `<addr:sz:name>` | Watch a named SRAM variable; printed at every breakpoint hit. `sz` = 1/2/4. |
 | `--dump-regs` | — | Dump all 32 registers + SP + SREG at every breakpoint hit. |
 | `--dump-sram` | `<addr:len>` | Hex+ASCII dump of a SRAM range at every breakpoint hit. |
 | `-t` | `<cycles>` | Print PC + watches every N CPU cycles (time-series trace). |
 | `-s` | — | Print PC after every single instruction (use with a small `--max-steps`). |
+
+### Testing & CI (Headless Operations)
+
+| Flag | Argument | Effect |
+|------|----------|--------|
+| `--uart0-in` | `<string>` | Deterministic literal string injection into UART0 RX at 9600 baud. |
+| `--uart0-out` | `<file>` | Capture raw UART0 TX directly to a file (bypasses TCP/PTY). |
+| `--exit-on-uart` | `<string>` | Exit simulator successfully (code 0) the moment this exact string is transmitted over UART. |
+| `--wait-tcp` | — | Halt execution at cycle 0 until a TCP client connects. |
 
 ### Profiling (ELF only — requires symbol table)
 

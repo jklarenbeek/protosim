@@ -275,4 +275,8 @@ void uart_com_connect(uart_com_t *p, char uart) {
   printf("  putty.exe -telnet 127.0.0.1 %d\n\n", p->port.port);
 }
 
+int uart_com_is_connected(uart_com_t *p) {
+  return (p->port.s != INVALID_SOCKET);
+}
+
 #endif // _WIN32

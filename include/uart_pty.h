@@ -74,4 +74,6 @@ uart_pty_connect(
 		uart_pty_t * p,
 		char uart);
 
+int uart_pty_is_connected(uart_pty_t * p);
+
 #endif /* __UART_PTY_H___ */

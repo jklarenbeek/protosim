@@ -257,3 +257,9 @@ void uart_pty_connect(uart_pty_t *p, char uart) {
       }
     }
 }
+
+int uart_pty_is_connected(uart_pty_t *p) {
+  /* PTYs don't have a strict accept() state like sockets. 
+     We return 1 so wait-tcp doesn't hang on Linux natively. */
+  return 1;
+}

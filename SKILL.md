@@ -33,7 +33,7 @@ While `protosim` can run `.hex` files, **you should compile and use `.elf` files
 
 ## 4. Key Capabilities & Flags
 ### Debugging Features
-- `-b <symbol>`: Breakpoint on a function name (e.g., `-b main`). Fires every time the function is called.
+- `-b <symbol>`: Breakpoint on a function name (e.g., `-b main`). Fires every time the function is called. Supports `*` wildcard matching (e.g., `-b *handler*`) to bypass mangled names.
 - `-w <addr:size:name>`: Watch a variable in SRAM. Prints the value at every breakpoint.
   - *Tip for LLMs*: Find SRAM addresses automatically to set up watches: `avr-nm --demangle app.elf | grep -E " [dDbB] "`
 - `--dump-regs`: Prints all registers, SP, and SREG at every breakpoint.
@@ -54,8 +54,20 @@ bin/protosim app.elf --profile --callgraph --coverage --max-steps 1000000 --prof
 
 ### Serial UART Interaction
 If the firmware reads from or writes to `uart_rx()`/`uart_tx()`, `protosim` bridges this to the host:
-- **Linux**: You can provide stimuli by writing to `/tmp/simavr-uart0` (e.g., with Python scripts, echo, or picocom).
-- **Windows**: You can connect to `127.0.0.1:4000` via TCP (e.g., using a short Python socket script) to inject interactive data into the simulator while it runs.
+- **Linux PTY**: You can provide stimuli by writing to `/tmp/simavr-uart0` (e.g., with Python scripts, echo, or picocom).
+- **Windows TCP**: You can connect to `127.0.0.1:4000` via TCP. If doing this programmatically, use the `--wait-tcp` flag to prevent the simulator from starting until your socket explicitly connects!
+
+#### Deterministic Testing (Headless UART)
+Instead of dealing with asynchronous PTYs or TCP sockets, you can instruct `protosim` to handle I/O deterministically within the main simulation loop:
+- `--uart0-in <string>`: Inject a literal string into the firmware's UART RX register.
+- `--uart0-out <file>`: Capture all UART TX output to a file.
+- `--exit-on-uart <string>`: Halt and exit successfully (code `0`) the moment the firmware outputs this string over TX.
+
+Example Deterministic Test:
+```bash
+bin/protosim app.elf --uart0-in "hello\n" --uart0-out out.txt --exit-on-uart "SUCCESS" --max-steps 10000000
+```
+This is the **preferred approach** for LLMs to build self-verifying test scripts without complex asynchronous Python subprocesses.
 
 ## 5. Troubleshooting
 - If step limits are reached before target behavior occurs, **increase `--max-steps`**.

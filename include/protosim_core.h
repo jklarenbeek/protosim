@@ -30,6 +30,11 @@ extern int opt_single_step;
 extern long opt_max_steps;
 extern long opt_trace_every;
 
+extern char *opt_uart0_in;
+extern char *opt_uart0_out;
+extern char *opt_exit_on_uart;
+extern int opt_wait_tcp;
+
 /* ═══════════════════════════════════════════════════════════════
    Opcode Utilities (Shared by main loop and profiling)
    ═══════════════════════════════════════════════════════════════ */

@@ -19,6 +19,8 @@
 #include "sim_elf.h"
 #include "sim_gdb.h"
 #include "sim_hex.h"
+#include "avr_uart.h"
+#include "sim_time.h"
 
 #ifdef _WIN32
 #include "uart_com.h"
@@ -42,6 +44,45 @@ int opt_dump_regs = 0;
 int opt_single_step = 0;
 long opt_max_steps = 0;
 long opt_trace_every = 0;
+
+char *opt_uart0_in = NULL;
+char *opt_uart0_out = NULL;
+char *opt_exit_on_uart = NULL;
+int opt_wait_tcp = 0;
+
+int force_exit_success = 0;
+FILE *uart0_out_file = NULL;
+char exit_uart_buf[512] = {0};
+int exit_uart_len = 0;
+
+static void uart0_out_hook(struct avr_irq_t *irq, uint32_t value, void *param) {
+  if (uart0_out_file) {
+    fputc(value, uart0_out_file);
+  }
+  if (opt_exit_on_uart) {
+    if (exit_uart_len < sizeof(exit_uart_buf) - 1) {
+      exit_uart_buf[exit_uart_len++] = (char)value;
+      exit_uart_buf[exit_uart_len] = '\0';
+    } else {
+      memmove(exit_uart_buf, exit_uart_buf + 1, exit_uart_len - 1);
+      exit_uart_buf[exit_uart_len - 1] = (char)value;
+    }
+    if (strstr(exit_uart_buf, opt_exit_on_uart) != NULL) {
+      force_exit_success = 1;
+    }
+  }
+}
+
+static avr_cycle_count_t uart0_in_timer(struct avr_t *avr, avr_cycle_count_t when, void *param) {
+  static int injected_idx = 0;
+  if (!opt_uart0_in || opt_uart0_in[injected_idx] == '\0') return 0;
+  
+  avr_irq_t *rx_irq = avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ('0'), UART_IRQ_INPUT);
+  if (rx_irq) {
+    avr_raise_irq(rx_irq, opt_uart0_in[injected_idx++]);
+  }
+  return when + avr_hz_to_cycles(avr, 1000); // 1ms approx for 9600 baud
+}
 
 #ifdef _WIN32
 uart_com_t uart_com;
@@ -82,6 +123,11 @@ int main(int argc, char *argv[]) {
         "  --max-steps <n>        Exit after N steps (prevents hangs)\n"
         "  -t <n>                 Trace: print PC + watches every N cycles\n"
         "  -s                     Single-step: print PC for every instruction\n"
+        "\nLLM Testing & CI tools:\n"
+        "  --uart0-in <string>    Inject literal string to UART0 RX\n"
+        "  --uart0-out <file>     Capture UART0 TX to file (bypasses TCP)\n"
+        "  --exit-on-uart <str>   Exit successfully when exact string is printed\n"
+        "  --wait-tcp             Wait for TCP client before starting simulation\n"
         "\nLLM Profiling tools (ELF only):\n"
         "  --coverage             Per-function code coverage report\n"
         "  --profile              Cycle-exact flat performance profile\n"
@@ -128,6 +174,14 @@ int main(int argc, char *argv[]) {
       if (i + 1 < argc) opt_profile_out = argv[++i];
     } else if (!strcmp(argv[i], "--bootloader")) {
       if (i + 1 < argc) opt_bootloader = argv[++i];
+    } else if (!strcmp(argv[i], "--uart0-in")) {
+      if (i + 1 < argc) opt_uart0_in = argv[++i];
+    } else if (!strcmp(argv[i], "--uart0-out")) {
+      if (i + 1 < argc) opt_uart0_out = argv[++i];
+    } else if (!strcmp(argv[i], "--exit-on-uart")) {
+      if (i + 1 < argc) opt_exit_on_uart = argv[++i];
+    } else if (!strcmp(argv[i], "--wait-tcp")) {
+      opt_wait_tcp = 1;
     }
   }
 
@@ -272,13 +326,51 @@ int main(int argc, char *argv[]) {
   }
 
   /* ── PTY/COM UART ────────────────────────────────────────────── */
+  int headless_uart = (opt_uart0_in || opt_uart0_out || opt_exit_on_uart);
+  if (headless_uart) {
+    printf("[UART] Headless mode enabled. Bypassing TCP/PTY.\n");
+    if (opt_uart0_out) {
+      uart0_out_file = fopen(opt_uart0_out, "wb");
+      if (!uart0_out_file) {
+        fprintf(stderr, "Failed to open --uart0-out %s\n", opt_uart0_out);
+      }
+    }
+    // Setup hooks
+    uint32_t f = 0;
+    avr_ioctl(avr, AVR_IOCTL_UART_GET_FLAGS('0'), &f);
+    f &= ~AVR_UART_FLAG_STDIO;
+    avr_ioctl(avr, AVR_IOCTL_UART_SET_FLAGS('0'), &f);
+
+    avr_irq_t *tx = avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ('0'), UART_IRQ_OUTPUT);
+    if (tx) {
+      avr_irq_register_notify(tx, uart0_out_hook, NULL);
+    }
+    if (opt_uart0_in) {
+      avr_cycle_timer_register(avr, avr_hz_to_cycles(avr, 1000), uart0_in_timer, NULL);
+    }
+  } else {
 #ifdef _WIN32
-  uart_com_init(avr, &uart_com);
-  uart_com_connect(&uart_com, '0');
+    uart_com_init(avr, &uart_com);
+    uart_com_connect(&uart_com, '0');
+    if (opt_wait_tcp) {
+      printf("[TCP] Waiting for client to connect to port %d...\n", uart_com.port.port);
+      while (!uart_com_is_connected(&uart_com)) {
+        Sleep(100);
+      }
+      printf("[TCP] Client connected. Starting simulation.\n");
+    }
 #else
-  uart_pty_init(avr, &uart_pty);
-  uart_pty_connect(&uart_pty, '0');
+    uart_pty_init(avr, &uart_pty);
+    uart_pty_connect(&uart_pty, '0');
+    if (opt_wait_tcp) {
+      printf("[TCP] Waiting for client to connect on PTY %s...\n", uart_pty.port[0].slavename);
+      while (!uart_pty_is_connected(&uart_pty)) {
+        usleep(100000);
+      }
+      printf("[TCP] Client connected. Starting simulation.\n");
+    }
 #endif
+  }
 
   /* ── STK500 auto-upload ────────── */
   if (opt_bootloader && stk_app_binary) {
@@ -314,11 +406,20 @@ int main(int argc, char *argv[]) {
     }
 
     steps++;
+    
+    if (force_exit_success) {
+      printf("[DBG] SUCCESS: Match '--exit-on-uart %s' found. Exiting correctly.\n", opt_exit_on_uart);
+      break;
+    }
 
     if (opt_max_steps && steps >= opt_max_steps) {
       printf("[DBG] MAX-STEPS (%ld) reached — stopping.\n", opt_max_steps);
       if (opt_dump_regs) dump_registers(avr);
       dump_watches(avr);
+      if (opt_exit_on_uart) {
+        fprintf(stderr, "[ERR] --exit-on-uart condition not met within max-steps.\n");
+        exit(1);
+      }
       break;
     }
 
@@ -355,5 +456,16 @@ int main(int argc, char *argv[]) {
     if (pout && pout != stdout) fclose(pout);
   }
 
-  return 0;
+  if (uart0_out_file) fclose(uart0_out_file);
+  
+  // Clean up sockets/PTY if used
+  if (!headless_uart) {
+#ifdef _WIN32
+    uart_com_stop(&uart_com);
+#else
+    uart_pty_stop(&uart_pty);
+#endif
+  }
+
+  return force_exit_success ? 0 : 0;
 }
