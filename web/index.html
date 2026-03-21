@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: #0a0f1a;
+    color: #e8e4d8;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .hero {
+    background: linear-gradient(160deg, #0a0f1a 0%, #0d1f35 50%, #091820 100%);
+    border-bottom: 1px solid #1e3a55;
+    padding: 56px 48px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -60px;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, rgba(22,120,200,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -20px; left: -40px;
+    width: 240px; height: 200px;
+    background: radial-gradient(circle, rgba(0,200,140,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #4db8ff;
+    border: 1px solid rgba(77,184,255,0.3);
+    padding: 4px 10px;
+    border-radius: 3px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: 36px;
+    font-weight: 400;
+    line-height: 1.2;
+    color: #f0ece0;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: #4db8ff;
+  }
+
+  .hero-sub {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #7aab9c;
+    line-height: 1.5;
+  }
+
+  .body {
+    padding: 40px 48px;
+    background: #0d1218;
+  }
+
+  .lede {
+    font-size: 19px;
+    line-height: 1.7;
+    color: #c8c4b4;
+    margin-bottom: 36px;
+    border-left: 3px solid #4db8ff;
+    padding-left: 20px;
+  }
+
+  p {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #a8a498;
+    margin-bottom: 20px;
+  }
+
+  h2 {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #4db8ff;
+    margin: 40px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(77,184,255,0.2);
+  }
+
+  .terminal {
+    background: #060c14;
+    border: 1px solid #1e3a55;
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin: 24px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+
+  .terminal .prompt { color: #4db8ff; }
+  .terminal .flag { color: #7aab9c; }
+  .terminal .out { color: #6b7fa0; }
+  .terminal .hot { color: #f0902a; }
+  .terminal .ok { color: #3dba78; }
+  .terminal .dim { color: #3a4a5c; }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .feature-card {
+    background: #060c14;
+    border: 1px solid #1a2e42;
+    border-radius: 6px;
+    padding: 20px;
+  }
+
+  .feature-card .icon {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: #4db8ff;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .feature-card strong {
+    display: block;
+    font-family: 'Georgia', serif;
+    font-size: 15px;
+    color: #d8d4c4;
+    margin-bottom: 6px;
+    font-weight: 400;
+  }
+
+  .feature-card p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 0;
+    color: #6a7f94;
+  }
+
+  .pull-quote {
+    margin: 40px 0;
+    padding: 28px 32px;
+    background: rgba(77,184,255,0.05);
+    border-left: 3px solid #4db8ff;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .pull-quote p {
+    font-size: 20px;
+    line-height: 1.5;
+    color: #c8c4b4;
+    font-style: italic;
+    margin: 0;
+  }
+
+  .hashtags {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid #1a2e42;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .hashtag {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #4db8ff;
+    opacity: 0.7;
+  }
+
+  .author-line {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid #1a2e42;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .author-avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: #0d2035;
+    border: 1px solid #1e3a55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #4db8ff;
+  }
+
+  .author-info { font-size: 13px; color: #6a7f94; }
+  .author-info strong { color: #a8a498; font-weight: 400; display: block; }
+
+  @media (max-width: 540px) {
+    .hero, .body { padding-left: 24px; padding-right: 24px; }
+    h1 { font-size: 26px; }
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="tag">// open source · embedded · devtools</div>
+  <h1>Debug your AVR firmware<br>without touching <em>any hardware</em></h1>
+  <div class="hero-sub">$ bin/protosim app.elf --profile --callgraph --max-steps 1000000</div>
+</div>
+
+<div class="body">
+
+  <p class="lede">I built a cycle-accurate AVR simulator that gives you named breakpoints, variable watches, full profiling, and code coverage — from a single command line, zero firmware changes required.</p>
+
+  <p>Embedded development has a dirty secret: the feedback loop is brutal. You write code, flash it, attach a logic analyser, squint at waveforms, flash again. Repeat. For most projects, 80% of debugging time is fighting the hardware, not the logic.</p>
+
+  <p>So I built <strong>protosim</strong> — a wrapper around <strong>simavr</strong> that turns AVR firmware simulation into something you'd actually want to use as a daily driver.</p>
+
+  <h2>// what makes it different</h2>
+
+  <p>Most AVR simulators are either too primitive (just a PC counter and cycle ticks) or too heavyweight (full IDE integration, 30-step setup). protosim sits in the sweet spot: a single binary, no firmware modifications, and a capability set that rivals hardware debuggers.</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon">→ breakpoints</div>
+      <strong>Named symbol breakpoints</strong>
+      <p>Break on <span style="font-family:monospace;color:#4db8ff">-b uart_init</span> or wildcard <span style="font-family:monospace;color:#4db8ff">-b *handler*</span>. No address arithmetic.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">→ watches</div>
+      <strong>SRAM variable watches</strong>
+      <p>Print any variable's value at every breakpoint. The AVR calling convention means r24/r25 tell you the function argument.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">→ profiling</div>
+      <strong>Cycle-exact flat profile</strong>
+      <p>Not sampled. Not approximated. Every <span style="font-family:monospace;color:#4db8ff">avr_run()</span> call reports the exact cycles consumed by that one instruction.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">→ callgraph</div>
+      <strong>Dynamic call graph</strong>
+      <p>Per-edge call counts, total cycles, and a hot path marker — detected via opcode pattern matching across all five AVR CALL/RET variants.</p>
+    </div>
+  </div>
+
+  <h2>// real output, real numbers</h2>
+
+  <p>Here's what a profiling run looks like against a demo firmware — no post-processing, no special build flags:</p>
+
+  <div class="terminal">
+<span class="prompt">$</span> bin/protosim demo.elf <span class="flag">--profile --callgraph --max-steps</span> 1000000<br>
+<br>
+<span class="dim">[PROF] Flat Performance Profile (cycle-exact)</span><br>
+<span class="dim">[PROF] ─────────────────────────────────────────────</span><br>
+<span class="dim">[PROF] Rank  Function        Self Cycles  Self %  Calls</span><br>
+<span class="dim">[PROF] ────  ──────────────  ───────────  ──────  ─────</span><br>
+<span class="hot">[PROF]    1  uart_tx           1645845   98.92%     92  ◄ HOT</span><br>
+<span class="out">[PROF]    2  compute             16330    0.98%     71</span><br>
+<span class="out">[PROF]    3  main                 1002    0.06%      1</span><br>
+<span class="out">[PROF]    4  uart_send             248    0.01%      1</span><br>
+<span class="out">[PROF]    5  uart_init              15    0.00%      1</span><br>
+<br>
+<span class="dim">[COV]  unused_handler             0  →  0.0%  ← NEVER REACHED</span><br>
+<br>
+<span class="ok">[DBG]  Simulated time: 103.987 ms @ 16000000 Hz</span>
+  </div>
+
+  <p>The hot path jumps out immediately. <code style="font-family:monospace;color:#7aab9c;font-size:13px">uart_tx</code> is eating 98.9% of runtime — not because the algorithm is wrong, but because UART is inherently slow. That's the kind of insight that takes hours to find with a logic analyser and seconds with a profiler.</p>
+
+  <div class="pull-quote">
+    <p>"The feedback loop for embedded code shouldn't cost you 20 minutes every iteration. A simulator with real observability changes what's possible."</p>
+  </div>
+
+  <h2>// designed for LLMs too</h2>
+
+  <p>One thing I deliberately designed for: <strong>LLM-friendly debugging</strong>. The SKILL.md in the repo tells an AI assistant exactly how to drive protosim — which flags to use, how to interpret register dumps, how to set up deterministic UART tests. The profiling output format is human-readable but also completely parseable.</p>
+
+  <p>Headless UART testing is especially useful here. Instead of async PTY/TCP gymnastics, you can do this:</p>
+
+  <div class="terminal">
+<span class="prompt">$</span> bin/protosim app.elf <span class="flag">--uart0-in</span> <span class="ok">"hello\n"</span> <span class="flag">--uart0-out</span> out.txt <span class="flag">--exit-on-uart</span> <span class="ok">"SUCCESS"</span> <span class="flag">--max-steps</span> 10000000
+  </div>
+
+  <p>That's a complete self-verifying firmware test. No test harness, no Arduino board, no USB cable. CI-friendly by default.</p>
+
+  <h2>// works on windows too</h2>
+
+  <p>simavr is deeply Linux-native. Getting it to build on Windows without patching the source was genuinely tricky — the solution was a single compatibility header injected at compile time via <code style="font-family:monospace;color:#7aab9c;font-size:13px">gcc -include</code>. Four shims: <code style="font-family:monospace;color:#7aab9c;font-size:13px">closesocket()</code> vs <code style="font-family:monospace;color:#7aab9c;font-size:13px">close()</code>, a <code style="font-family:monospace;color:#7aab9c;font-size:13px">CLOCK_MONOTONIC_RAW</code> override, an <code style="font-family:monospace;color:#7aab9c;font-size:13px">ssize_t</code> typedef, and an inline <code style="font-family:monospace;color:#7aab9c;font-size:13px">basename()</code>. MSYS2 UCRT64 handles everything else. The result: <code style="font-family:monospace;color:#7aab9c;font-size:13px">protosim.exe</code> with full feature parity.</p>
+
+  <h2>// try it</h2>
+
+  <p>The repo is at <strong>github.com/jklarenbeek/protosim</strong>. The README has worked examples with real output — not toy demos. If you're doing AVR development, or just curious about how cycle-accurate simulation works under the hood, take a look.</p>
+
+  <p>Feedback welcome. Especially curious what features embedded folks would find most useful — coverage-gated CI? GDB integration? EEPROM simulation? Open an issue.</p>
+
+  <div class="hashtags">
+    <span class="hashtag">#EmbeddedSystems</span>
+    <span class="hashtag">#Arduino</span>
+    <span class="hashtag">#AVR</span>
+    <span class="hashtag">#OpenSource</span>
+    <span class="hashtag">#DevTools</span>
+    <span class="hashtag">#Firmware</span>
+    <span class="hashtag">#SoftwareTesting</span>
+    <span class="hashtag">#CProgramming</span>
+    <span class="hashtag">#LLM</span>
+    <span class="hashtag">#CI</span>
+  </div>
+
+  <div class="author-line">
+    <div class="author-avatar">JK</div>
+    <div class="author-info">
+      <strong>Joham Klarenbeek</strong>
+      Embedded systems · language design · tooling
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
