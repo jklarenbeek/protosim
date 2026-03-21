@@ -125,9 +125,9 @@ sudo apt install simavr -y
 ### Step 6: Clone and Set Up the protosim Project
 This pulls the project code, sets up Protoduino and simavr libraries, and builds the simulator.
 
-1. Clone the repository (replace with actual URL if it's hosted; assuming it's local or on GitHub):
+1. Clone the repository:
    ```bash
-   git clone https://github.com/jklarenbeek/protosim.git  # Replace with real repo URL
+   git clone https://github.com/jklarenbeek/protosim.git
    cd protosim
    ```
 
