@@ -1,0 +1,413 @@
+<h2><span class="n">07</span>GDB implementation</h2>
+
+<p>Protosim already sets <code>gdb_port</code> to 1234, stops the CPU and calls <code>avr_gdb_init()</code> for <code>-d</code>. The pinned stub implements register and memory access, breakpoints, stepping and data watchpoint requests. It also has boundary and startup problems described in sections 22 and 25. [S1, S5]</p>
+
+<div class="box">
+<h4>What a real session did <span class="tag n">2.1</span> <span class="tag m">executed</span></h4>
+<p>avr-gdb 15.0.50 in MI mode against <code>protosim -d</code>, firmware built with <code>avr-gcc -Os -g</code>, on ATmega328P and ATmega2560:</p>
+<table class="tight">
+  <thead><tr><th style="width:34%">Request</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td><code>-target-select remote localhost:1234</code></td><td><code>^connected</code></td></tr>
+    <tr><td><code>-break-insert main</code>, <code>-exec-continue</code></td><td><code>*stopped,reason="breakpoint-hit"</code>, function <code>main</code>, source line 14</td></tr>
+    <tr><td><code>-data-evaluate-expression counter</code></td><td>4660, the initial value of a <code>.data</code> variable: start-up code had run</td></tr>
+    <tr><td><code>-data-evaluate-expression "(char)banner[0]"</code></td><td>104 <code>'h'</code>: a constant in flash, read through the program-memory space</td></tr>
+    <tr><td><code>-stack-list-frames</code></td><td>Frame 0 with function, file and full path</td></tr>
+    <tr><td><code>-exec-next</code>, <code>-exec-step-instruction</code></td><td><code>end-stepping-range</code> at the next line, then at the next instruction</td></tr>
+    <tr><td><code>-break-watch counter</code>, <code>-exec-continue</code></td><td><code>watchpoint-trigger</code>, old value 4660, new value 4764, with the frame of the write</td></tr>
+    <tr><td>Read the last byte of flash</td><td><code>^error,msg="Unable to read memory."</code>; the byte before it reads (AV01)</td></tr>
+    <tr><td><code>-exec-interrupt</code> while running, default mode</td><td>No result record within four seconds. SIGINT to gdb stopped the target.</td></tr>
+    <tr><td>The same after <code>-gdb-set mi-async on</code></td><td><code>^done</code>, then <code>*stopped,reason="signal-received",signal-name="SIGINT"</code></td></tr>
+  </tbody>
+</table>
+<p>This is one firmware and one stub revision, not a qualification. It does settle the open question of edition 2.0: the existing support is enough to build on.</p>
+</div>
+
+<h4>Startup sequence</h4>
+<ul>
+  <li>Resolve and freeze the target profile, ELF and source manifest. Start Protosim stopped; verify listener readiness and its actual endpoint. <span class="tag n">2.1</span> Readiness cannot be taken from Protosim's output today: it prints &ldquo;listening&rdquo; when the bind failed (PS07). Connect and check, or fix PS07 first.</li>
+  <li>Start avr-gdb with <code>--interpreter=mi2</code> and the matching ELF. <span class="tag n">2.1</span> Send <code>-gdb-set mi-async on</code> before connecting. Connect with the remote target command. Negotiate supported commands and inspect initial state.</li>
+  <li>Resolve requested source/function breakpoints. Report unresolved or optimised locations rather than quietly substituting another address.</li>
+  <li>Resume only after the controller has installed input schedules, capture and execution limits. <span class="tag n">2.1</span> Do not pass <code>--max-steps</code> to a debug session until PS02 is fixed: the budget runs down while the target is stopped, about 20 counts per second.</li>
+</ul>
+
+<table class="tight">
+  <thead><tr><th style="width:26%">Operation</th><th>Typical MI request / behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>Load symbols / attach</td><td><code>-file-exec-and-symbols</code>; <code>-target-select remote host:port</code></td></tr>
+    <tr><td>Break / watch</td><td><code>-break-insert</code>; <code>-break-watch</code>. Conditions may be evaluated by GDB on host stops.</td></tr>
+    <tr><td>Continue / step</td><td><code>-exec-continue</code>; <code>-exec-step</code>; <code>-exec-next</code>; <code>-exec-step-instruction</code></td></tr>
+    <tr><td>Inspect</td><td><code>-stack-list-frames</code>; <code>-stack-list-variables</code>; <code>-data-evaluate-expression</code>; memory/register requests</td></tr>
+    <tr><td>Pause / stop events</td><td><code>-exec-interrupt</code> with <code>mi-async on</code>; parse asynchronous stopped records; keep the SIGINT fallback.</td></tr>
+    <tr><td>More symbol files <span class="tag n">2.1</span></td><td><code>add-symbol-file boot.elf</code> for a bootloader beside the application, and one per loaded module (10).</td></tr>
+  </tbody>
+</table>
+<p>Maintain a real MI parser for tokens, escaped strings, tuples, lists, result records and asynchronous events. Do not infer machine state from prompts or regexes over human output. Test the selected avr-gdb release rather than assuming modern host-GDB behaviour is identical. [R1]</p>
+<p>Advertise capability results for conditional/watch breakpoints, memory spaces and maximum transfers. Simavr watchpoints observe instrumented access paths; they are not automatically a log of every host or peripheral mutation. Verify the relevant paths for each supported observation. Live variable inspection should default to a coherent stopped state.</p>
+<p class="small">The debugger should expose controlled writes as explicit experiments. RAM/register writes, peripheral I/O and flash programming have different semantics; a raw remote write may bypass modelled peripheral side effects. Source fixes still require rebuild and clean replay.</p>
+
+<h2><span class="n">08</span>Session lifecycle</h2>
+
+<table class="tight">
+  <thead><tr><th style="width:18%">State</th><th>Allowed behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>starting</td><td>Allocate identifiers, start children, load identity and negotiate capabilities. Fail atomically if startup cannot complete.</td></tr>
+    <tr><td>stopped</td><td>Inspect consistent state; install breakpoints; queue input; start one run/step operation.</td></tr>
+    <tr><td>running</td><td>Capture output and service pause/cancel/status. Reject stale reads or offer an explicit pause-and-inspect operation.</td></tr>
+    <tr><td>faulted / exited</td><td>Preserve evidence and termination reason. Inspection is limited to what remains available.</td></tr>
+    <tr><td>closed</td><td>Children and endpoints are released. Retain immutable artefacts; reject execution requests.</td></tr>
+  </tbody>
+</table>
+<p>A <code>debug_start</code> response returns <code>session_id</code>, <code>build_id</code>, <code>profile_id</code>, capabilities and <code>state_version</code>. Each accepted state mutation increments the version. Operations include a <code>request_id</code> and optional <code>expected_state_version</code> to detect conflicting clients. A single controller owns execution per simulator; parallel tests use separate instances with separate endpoints.</p>
+
+<p><strong>Budgets and stopping.</strong> Maintain separate retired-instruction, simulated-cycle and wall-clock limits. A paused GDB poll consumes no retired-instruction budget. Sleeping can advance cycles without retiring instructions. A cycle deadline stops at an instruction/event boundary; report any overshoot rather than promising impossible mid-instruction interruption. Pause/cancel remains serviceable during long runs.</p>
+<p>Use stop reasons such as <code>breakpoint</code>, <code>watchpoint</code>, <code>step_complete</code>, <code>uart_match</code>, <code>cycle_budget</code>, <code>instruction_budget</code>, <code>user_pause</code>, <code>cpu_done</code>, <code>cpu_crashed</code>, <code>host_timeout</code> and <code>transport_lost</code>. Keep operation status separate from test verdict: reaching a UART marker does not prove all assertions passed, and reaching a diagnostic budget need not mean the tool itself malfunctioned.</p>
+
+<p><strong>Persistence and recovery.</strong> A session survives ordinary MCP calls while the controller lives. It does not automatically survive an agent exit, MCP disconnect or process restart. Default stdio mode cleans up child processes on shutdown. A future daemon mode can support reattachment with ownership and retained manifests. Reset/replay is the initial recovery path; complete snapshots require CPU, RAM, flash, EEPROM, peripheral, timer and input-queue state.</p>
+
+<div class="box warn">
+<h4>Reset is not a clean slate in simavr <span class="tag n">2.1</span></h4>
+<p>&ldquo;Reset and replay&rdquo; needs three things that do not hold today. <code>avr_reset()</code> discards every pending cycle timer, so whatever the controller scheduled, UART input included, stops for good unless it is registered again (AV08, PS16). It restarts the cycle counter at zero, so cycle stamps and profile totals from before and after a reset do not add up (PS17). And it restarts at simavr's <code>reset_pc</code>, which Protosim never sets, so a board with a bootloader resets into the application (PS18). A replay that needs a reset should start a fresh simulator instance until these are fixed.</p>
+</div>
+<p class="small">A memory dump is not a complete replay checkpoint. Reverse execution is not supplied merely by enabling GDB; it needs a separately implemented recording/checkpoint mechanism. Do not advertise reverse-step until its semantics are validated.</p>
+
+<h2><span class="n">09</span>MCP contract</h2>
+
+<p>Keep <code>init_arduino_project</code>, <code>compile_firmware</code> and <code>run_simulation</code> available, with documented bug fixes. Add persistent tools using the same controller as any future standalone interface. Codex and Claude Code both document local stdio MCP connections. The MCP server does not need to invoke a model API or hold a model key. [S4, R6, R7]</p>
+
+<table>
+  <thead><tr><th style="width:20%">Tool family</th><th>Proposed interface</th></tr></thead>
+  <tbody>
+    <tr><td>Environment</td><td><code>doctor(options)</code>, <code>list_target_profiles()</code>, <code>get_capabilities()</code></td></tr>
+    <tr><td>Session</td><td><code>debug_start(build_id, profile_id)</code>, <code>debug_status(session_id)</code>, <code>debug_close(session_id)</code></td></tr>
+    <tr><td>Execution</td><td><code>debug_continue(session_id, limits)</code>, <code>debug_pause(session_id)</code>, <code>debug_step(session_id, mode)</code></td></tr>
+    <tr><td>Breakpoints</td><td><code>debug_breakpoint(session_id, action, location, condition)</code>, <code>debug_watchpoint(...)</code></td></tr>
+    <tr><td>Inspection</td><td><code>debug_inspect(session_id, expressions, limits)</code>, <code>debug_backtrace(...)</code>, <code>read_memory(space, address, length)</code></td></tr>
+    <tr><td>I/O and evidence</td><td><code>uart_send(...)</code>, <code>uart_read(..., cursor)</code>, <code>run_scenario(...)</code>, <code>get_operation(...)</code>, <code>cancel_operation(...)</code></td></tr>
+    <tr><td>Transfer and flash <span class="tag n">2.1</span></td><td><code>uart_send_file(session_id, path, protocol)</code> with XMODEM-CRC first; <code>reset_target(session_id, into)</code>; <code>flash_compare(session_id, elf_paths, ranges)</code> against an independent load of the files</td></tr>
+    <tr><td>Runtime adapters</td><td><code>inspect_processes(...)</code>, <code>inspect_mailbox(...)</code>, <code>inspect_vnodes(...)</code> when the matching decoder is available; <span class="tag n">2.1</span> <code>inspect_modules(...)</code></td></tr>
+  </tbody>
+</table>
+
+<p><strong>Response and concurrency rules.</strong> Return versioned structured data plus a concise textual summary. Include capability failures explicitly, and page large structures or logs using cursors. Long work returns an <code>operation_id</code> or waits only for a bounded interval. Polling must not restart the operation. Assign event sequence numbers and distinguish host timestamps from simulated cycles. Missing cycles are null with a reason, not zero.</p>
+<p>Use subprocess spawn/execFile with argument arrays, explicit working directories and controlled environment inheritance. Keep simulator/GDB stdout and stderr captured; only MCP protocol messages go to the server's stdout. All child diagnostics are tool results, evidence artefacts or stderr. Validate numeric bounds, paths and profile identifiers before launching.</p>
+<p>Retry semantics matter: inspect/status are repeatable; continue, reset, UART injection and flash writes are not blindly retryable. Use request identifiers and operation lookup to recover from uncertain delivery. Serialise mutations within each session. Handle stdin closure, client termination and child failure without leaving stray simulator processes.</p>
+
+<p><span class="tag n">2.1</span> <strong>Four additions from running the existing server.</strong></p>
+<ul>
+  <li><strong>Never return the whole output.</strong> <code>run_simulation</code> puts the complete stdout into <code>full_output</code>: 28,576 characters for a three-second firmware with coverage and call graph. Clients cap the size of a tool result and charge every byte to the model's context. Return a summary and a cursor; keep the log as an artefact.</li>
+  <li><strong>Say what a tool does to state.</strong> MCP tool annotations (<code>readOnlyHint</code>, <code>idempotentHint</code>, <code>destructiveHint</code>) carry exactly the retry distinction made above. Set them: inspect and status read-only, continue and UART injection not idempotent, <code>init_arduino_project</code> with overwrite destructive.</li>
+  <li><strong>Declare output schemas.</strong> A structured result with a published schema lets a client validate it; it also removes the temptation to parse text, which is how MC02 came about.</li>
+  <li><strong>Judge a child by how it ended, in three parts:</strong> exit code, terminating signal, and the stop reason the simulator reported. Node gives a signal and no code for a run that today ends normally (PS11); a controller that looks only at the code misreads it either way.</li>
+</ul>
+<p class="small">MCP is the common interface, not a promise that every client supports every optional notification/task extension. Start with ordinary tools, explicit operation polling and stdio. Add remote transport only when required by deployment. Client limits on result size and call duration differ and change; read them from the client's documentation when the tools are implemented.</p>
+
+<h2><span class="n">10</span>Source and runtime inspection</h2>
+
+<p>The host combines live machine bytes, ELF/DWARF type information and the exact source tree. GDB maps symbols and source locations; a Protoduino adapter interprets scheduler and IPC relationships. Retain ordinary non-loadable debug sections on the host. They do not need to be flashed to the AVR. Optimised-away state remains unavailable even when debug information is present. [R2, R3]</p>
+
+<table>
+  <thead><tr><th style="width:22%">Object</th><th>Host inspection approach</th></tr></thead>
+  <tbody>
+    <tr><td>Processes</td><td>Locate the static <code>process_list</code> in <code>process.c</code>; follow bounded <code>next</code> pointers; decode state, priority, thread pointer and continuation. <span class="tag n">2.1</span> Show <code>needs_poll</code> per process and the static <code>poll_requested</code>: PD02 and PD14 are visible only there.</td></tr>
+    <tr><td>Global event queue</td><td>Read <code>events</code>, <code>event_head</code> and <code>event_tail</code>; derive occupancy using the configured ring size and show pending destinations. <span class="tag n">2.1</span> Flag a full queue: a post that fails is silent (PD03).</td></tr>
+    <tr><td>Optional per-process inbox</td><td>Detect <code>PROCESS_CONF_EVENT_INBOX</code> in the actual build layout; decode only if present. Default configuration disables it.</td></tr>
+    <tr><td>IPC pool / pipe</td><td>Follow reachable objects or known symbols; inspect free lists, counts, head/tail and buffers with bounds checks. <span class="tag n">2.1</span> For a serial device process show both the pipe and the UART ring behind it: bytes strand between the two (PD15).</td></tr>
+    <tr><td>Vnodes / elements</td><td>Read element geometry, parent relationships, style and dirty flags; compare against the host terminal reconstruction.</td></tr>
+    <tr><td>Modules <span class="tag n">2.1</span></td><td>Read the module table page and each slot's descriptor from flash: magic, ABI, kernel identity, process type. Compare the kernel identity with the CRC of the kernel image the controller built.</td></tr>
+    <tr><td>Source location</td><td>Return repository, file, line, function, instruction address and build identity. Show assembly if source mapping is unavailable.</td></tr>
+  </tbody>
+</table>
+
+<p>Protoduino uses cooperative, stackless protothreads by default: <code>lc-switch.h</code> stores a line-based local continuation in a <code>uint16_t</code>. A suspended process does not have a conventional private saved call stack. Expose the continuation and process data; show the real CPU backtrace for currently executing code. An optional virtual-thread presentation must not invent frames. [S7] <span class="tag n">2.1</span> The continuation is a source line number, or an error code in the range <code>0xFF00</code> to <code>0xFFFE</code>, or <code>0xFFFF</code> for a thread that has been told to finalize. A decoder can therefore say where a suspended process waits, whether it holds a raised error it has not handled (PD21), and whether it is waiting for a cleanup that nothing will trigger (PD01), without running anything. The other continuation header, <code>lc-addrlabels.h</code>, is an <code>#error</code> at the pinned revision.</p>
+
+<p><strong>Decoder correctness.</strong> Resolve offsets from debug information instead of hard-coding one struct layout. Identify the Protoduino revision and feature flags. Bound pointer traversal, detect cycles, validate addresses against the selected memory space and report corrupt data rather than following it indefinitely. Process names and descriptors may live in program memory; distinguish AVR data addresses, flash byte addresses, code-pointer conventions and GDB's synthetic memory-space offsets.</p>
+<p>An object with no symbol can still be discovered through a reachable pointer and known type, but arbitrary bytes do not identify their own meaning. Source-aware inspection is strongest with an unstripped matching ELF. A generic byte-inspection fallback must remain available when a semantic decoder does not support the build.</p>
+
+<div class="box warn">
+<h4>Which build can be inspected <span class="tag n">2.1</span></h4>
+<ul>
+  <li><strong>Debug information is a build decision.</strong> The session of section 07 used <code>avr-gcc -Os -g</code> directly. A PlatformIO or Arduino build is different: the Arduino AVR tool chain compiles and links with link-time optimisation, and a PlatformIO release build carries no debug information unless the project selects the debug build type. What a decoder can resolve in such an ELF, static variables like <code>process_list</code> in particular, was not measured here and must be before F09 is designed around it. The likely outcome is a declared debug profile (PlatformIO <code>build_type = debug</code>, or explicit flags without LTO) and a doctor check that the ELF has the types the decoders need.</li>
+  <li><strong>One name, several objects.</strong> <code>CC_EXTERN</code> is empty in C, so <code>process_current</code> is defined in every C file that includes <code>process.h</code> and merged by the linker (PD11). A decoder sees one symbol today; with a newer compiler the build fails instead.</li>
+  <li><strong>Modules are easy.</strong> A module of the loader work is a fully linked <code>ET_EXEC</code> file at absolute slot addresses. <code>add-symbol-file module.elf</code> registers it without section addresses; remove it on unload.</li>
+</ul>
+</div>
+<p class="small">Rebuilding creates a new build identity. Do not reinterpret yesterday's running binary using today's struct definitions. Dynamically loaded modules need symbol registration and removal on unload. [R2]</p>
+
+<h2><span class="n">11</span>Doctor: user contract</h2>
+
+<p>Proposed canonical command: <code>protosim --doctor</code>. Also accept <code>protosim doctor</code> as a discoverable alias. Neither requires a firmware positional argument. Default output is a concise, stable, readable report on stdout; <code>--doctor --json</code> emits one JSON object for agents and CI. It must report the environment it actually inspected rather than infer readiness from installed package names. <span class="tag n">2.1</span> Today <code>protosim --help</code> answers &ldquo;Cannot load ELF --help&rdquo; and there is no version output at all, so doctor has nothing to report as Protosim's own identity until PS12 is done.</p>
+
+<table>
+  <thead><tr><th style="width:21%">Check group</th><th>What to report</th></tr></thead>
+  <tbody>
+    <tr><td>Host and binary</td><td>OS/architecture; Protosim version/revision and executable path; working directory; effective config sources.</td></tr>
+    <tr><td>AVR toolchain</td><td>Resolved avr-gcc/avr-g++, avr-gdb, linker, objcopy, objdump, size, nm/readelf paths and versions; timeout/error for each probe. <span class="tag n">2.1</span> The compiler version matters: GCC 10 and later turn PD11 into a link error.</td></tr>
+    <tr><td>Build integration</td><td>PlatformIO command and selected environment; optional Make/CMake path where used; Node and MCP build entry point. <span class="tag n">2.1</span> Which of the three server builds is in use, and whether it matches <code>index.ts</code> (MC06).</td></tr>
+    <tr><td>Dependencies</td><td>Bundled/pinned simavr identity; standalone versus submodule Protoduino revision; uninitialised or dirty dependencies.</td></tr>
+    <tr><td>Targets</td><td>Known MCU/profile identifiers; memory layout; supported versus experimental capabilities; compiler/profile compatibility. <span class="tag n">2.1</span> Per target, whether Protoduino builds for it at all (PD17).</td></tr>
+    <tr><td>Debug and transport</td><td>GDB support, requested endpoint conflicts, PTY/TCP facilities and permissions. A free port check is provisional until bind succeeds.</td></tr>
+    <tr><td>Workspace</td><td>Repository roots and revisions; relevant source/ELF availability; linker/profile paths and stale build warnings.</td></tr>
+    <tr><td>Readiness</td><td>Separate ready states for run, build, debug, MCP and hardware workflows; actionable missing requirements.</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Modes and behaviour.</strong> Default checks discover configuration and run bounded version/help probes; they do not install tools, change fuses, flash hardware, fetch models or modify repositories. An explicit <code>--doctor --check-debug</code> mode may create a temporary fixture, compile it, start a simulator and verify a GDB breakpoint. Report this as an active smoke test, capture its evidence and clean up. A <code>--timeout-ms</code> option caps the entire diagnosis. <span class="tag n">2.1</span> The script behind section 07 is such a smoke test and takes under ten seconds; it is listed in section 29.</p>
+<p>Optional flags: <code>--project PATH</code>, <code>--profile ID</code>, <code>--require build,debug,mcp</code>, <code>--json</code> and <code>--strict</code>. Prebuilt simulation needs no compiler; debugging a matching prebuilt ELF needs AVR-capable GDB, not a compiler. Building firmware or a smoke-test fixture needs a toolchain. A requested capability failure is an error; an unrelated optional component is a warning or skipped check.</p>
+<p class="small">Protosim needs no provider key when used through Claude Code or Codex; the client handles model access. For a configured standalone model adapter, report credential presence and selected provider only; never print key values, tokens or an unrestricted environment-variable dump.</p>
+
+<h2><span class="n">12</span>Doctor: implementation</h2>
+
+<p>Parse doctor before the existing firmware-argument path. Implement a common check registry used by CLI and MCP. Each check has an identifier, dependencies, bounded probe, structured evidence and remediation. Resolve configuration in a documented order: explicit CLI/tool arguments, project configuration, user configuration, supported environment variables, then defaults. Return the origin of each resolved tool/profile choice.</p>
+<pre><code>{
+  "schema_version": "1.0",
+  "command": "doctor",
+  "status": "degraded",
+  "requested_capabilities": ["build", "debug"],
+  "capabilities": {"build": true, "debug": false},
+  "checks": [{
+    "id": "tool.avr-gdb",
+    "status": "fail",
+    "required_for": ["debug"],
+    "resolved_path": null,
+    "version": null,
+    "config_source": "PATH",
+    "evidence": "Executable not found in resolved search paths",
+    "remediation": "Install/configure an AVR-capable GDB"
+  }],
+  "exit_code": 1
+}</code></pre>
+<p class="small">Illustrative future schema and result, not an observation of the user's machine. Add <code>generated_at</code>, <code>duration_ms</code>, binary/dependency revisions, profile summaries and per-probe errors in the implementation. <span class="tag n">2.1</span> On Ubuntu the remediation for this check is the package <code>gdb-avr</code>, which is what this review installed.</p>
+
+<table class="tight">
+  <thead><tr><th style="width:20%">Contract</th><th>Required behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>Stdout</td><td>Text report by default; exactly one JSON value in JSON mode, including failed checks. No banner, progress line or child output outside that JSON.</td></tr>
+    <tr><td>Stderr</td><td>Internal diagnostics when needed; substantive check results remain in stdout. Capture child output and redact secrets.</td></tr>
+    <tr><td>Exit status</td><td>0: requested capabilities ready; 1: a required check failed; 2: invocation/configuration error or doctor internal failure. Warnings yield 0 unless <code>--strict</code> promotes them.</td></tr>
+    <tr><td>MCP doctor</td><td>Return the same schema as structured tool content. Never print a raw doctor report into MCP protocol stdout.</td></tr>
+    <tr><td>Evidence strength</td><td>Label found, version-checked and smoke-tested separately. Missing, timeout, unsupported and skipped are distinct statuses.</td></tr>
+  </tbody>
+</table>
+<p>Acceptance cases include no firmware argument, missing AVR tools, paths with spaces, conflicting configs, a blocked port, stale ELF/source, a missing optional model adapter, and a probe that hangs. Validate the JSON schema and secret redaction. A doctor pass establishes environment readiness for its checks; it does not establish application correctness.</p>
+
+<h2><span class="n">13</span>Target profiles</h2>
+
+<p>A versioned target profile is the authoritative description of CPU, memory, clock, peripherals and toolchain layout. The simulator, linker, startup code and reporting must agree. A larger host allocation alone does not give compiled AVR code access to new memory. Keep feature configuration separate from hardware capacity, and record both in the build manifest.</p>
+
+<table class="tight">
+  <thead><tr><th style="width:30%">Profile</th><th class="num">Flash</th><th class="num">Usable SRAM</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>Stock ATmega2560</td><td class="num">262,144 B</td><td class="num">8,192 B</td><td>Existing device model; integration tests still required. <span class="tag n">2.1</span> Protoduino's timers do not compile for it (PD17).</td></tr>
+    <tr><td>Stock ATmega328P <span class="tag n">2.1</span></td><td class="num">32,768 B</td><td class="num">2,048 B</td><td>The part every executed check of this edition and the whole loader work ran on. The dependable first profile.</td></tr>
+    <tr><td>Virtual Mega2560 / data64k</td><td class="num">262,144 B</td><td class="num">65,024 B</td><td>Proposed expanded data-space profile</td></tr>
+    <tr><td>Virtual Mega2560 / flash1m</td><td class="num">1,048,576 B</td><td class="num">65,024 B</td><td>Experimental; qualify high-address behaviour first</td></tr>
+    <tr><td>Smaller AVR</td><td class="num">device</td><td class="num">device</td><td>Exact supported MCU and I/O adapters required</td></tr>
+  </tbody>
+</table>
+<p>For the Mega2560 mapping, SRAM begins at <code>0x0200</code>. Extending the last data address to <code>0xFFFF</code> yields 65,536 &minus; 512 = 65,024 bytes, or 63.5 KiB of usable SRAM. Calling this &ldquo;64 KiB RAM&rdquo; without qualification is misleading: it is a 64 KiB total data address space, including registers and I/O. Stock flash/SRAM and the address map follow the device definitions. [S6, R4]</p>
+<pre><code>profile:
+  id: virtual-mega2560-256k-data64k-v1
+  kind: virtual
+  base_mcu: atmega2560
+  clock_hz: 16000000
+  flash_bytes: 262144
+  data_space_bytes: 65536
+  sram_start: 512
+  usable_sram_bytes: 65024
+  linker_layout: generated-and-hashed
+  feature_manifest: protoduino-full-fixture-v1
+  boot:                              <span class="c"># new in 2.1</span>
+    section_bytes: 4096              <span class="c"># what the BOOTSZ fuses reserve</span>
+    reset_into: bootloader           <span class="c"># BOOTRST</span>
+    image: protoduino-boot-2972      <span class="c"># or optiboot-8.3, or none</span>
+  modules: {base: 0x6000, slots: 2, slot_bytes: 2048}
+  qualification: experimental</code></pre>
+<p>Apply geometry before <code>avr_init()</code> allocates storage. Validate loadable section ranges, SRAM initialisation and stack start. Reject contradictory embedded ELF MCU/frequency metadata instead of silently overriding a selected profile. Store actual resolved configuration, not just a profile name. Existing command-line <code>-m</code>/<code>-f</code> behaviour can remain available with an explicit conflict policy. [S1, S5]</p>
+<p><span class="tag n">2.1</span> <strong>A profile also has a boot section.</strong> Which bootloader a board carries, how large its section is and where reset goes decide what firmware can do: on a megaAVR only code in the boot section can program flash. The loader work measured what fits where: its bootloader with the load thread offered to the kernel is 2,042 bytes on the ATmega328P, which fills the 2 KB section, and 2,972 bytes with every option on the ATmega2560, which needs the 4 KB section because the 2 KB one is too small. A profile that does not record this cannot reproduce a loader run.</p>
+<p class="small">Some real Mega devices support external SRAM. A matching board/XMEM configuration, pin use and wait-state model is a separate hardware profile; virtual enlarged SRAM does not automatically model those physical timings. [R4]</p>
+
+<h2><span class="n">14</span>Memory engineering</h2>
+
+<p><strong>Flash and code addressing.</strong> The pinned simavr has a 32-bit <code>flashend</code> and allocation based on configured size; Mega2560 already uses extended program addressing. A 1 MiB virtual flash is plausible, but is not validated here. Qualify direct/indirect calls, returns, interrupts, high-address constants, ELPM and self-programming. Define implemented RAMPZ/EIND bits and boot-region rules for the virtual profile rather than inheriting physical-device assumptions blindly. [S5, S6]</p>
+<p>AVR GCC uses conventions for indirect calls, EIND and linker trampolines. Conventional function-pointer behaviour is not equivalent to a freely widened C pointer. Keep code-pointer/address conversions explicit in the loader and debugger. Near flash reads require appropriate placement or far-access alternatives; inspect the link map. [R5, R8] <span class="tag n">2.1</span> The loader work met both limits in practice. In the ATmega2560's boot section a table in flash lay beyond the reach of <code>LPM</code>, and the bootloader refused every file until the table was read through <code>ELPM</code>. And a module's process type must lie in the first 64 KiB, because <code>process_new()</code> reads it through a near pointer.</p>
+
+<p><strong>Data space and C assumptions.</strong> The pinned core uses a 16-bit <code>ramend</code> and classic data-address semantics. Flat 256 KiB or 1 MiB SRAM is outside the initial design: banking or a different architecture would require software support. Expanding within 64 KiB still exposes 16-bit signed arithmetic assumptions, pointer casts, size counters, allocation limits and startup stack configuration. Audit Protoduino's <code>free_mem()</code> and process descriptor sizes before a full-feature profile is accepted. [S5, S7, S10]</p>
+
+<table class="tight">
+  <thead><tr><th style="width:20%">Metric</th><th>Definition and caveat</th></tr></thead>
+  <tbody>
+    <tr><td>Flash occupancy</td><td>Loadable code, constants and initialised data image, plus reserved boot/module regions. Exclude host debug sections.</td></tr>
+    <tr><td>Static SRAM</td><td>Allocated <code>.data</code>, <code>.bss</code> and other sections including queues, buffers and runtime objects. <span class="tag n">2.1</span> And <code>.noinit</code>: the loader's bootloader keeps its only variable there.</td></tr>
+    <tr><td>Dynamic use</td><td>Pool occupancy, retained vnode/text storage and heap use if enabled; do not double-count allocations already in static storage.</td></tr>
+    <tr><td>Stack reserve</td><td>Record observed minimum SP/high-water evidence under scenarios. This is observed coverage, not a proof of worst-case stack usage.</td></tr>
+    <tr><td>Timing</td><td>Instruction/cycle measurements for the modelled CPU and peripherals; separate sleep/interrupt time and host elapsed time. <span class="tag n">2.1</span> State what the model leaves out: simavr programs a flash page in no time, a chip takes 7 to 9 ms with interrupts off (AV05).</td></tr>
+    <tr><td>Fairness <span class="tag n">2.1</span></td><td>Turns a reference process gets, and its longest wait, while a scenario runs. The loader work measured 18,053 turns and a longest wait of 15.1 ms during a 350 ms module load, and 2.0 ms with one scheduler function changed (PD14).</td></tr>
+  </tbody>
+</table>
+<p>Define a full-feature fixture that actually invokes scheduler, IPC, Unicode and TUI paths and includes representative buffers and texts. Merely enabling configuration flags can leave unused code removed by the linker. Establish measured flash, static RAM and runtime headroom before claiming that 256 KiB flash or a 63.5 KiB SRAM profile is sufficient.</p>
+<p class="small">Expanded SRAM does not require an AVR framebuffer. Budget nodes, text, layout/damage metadata, queues, transport buffers and stack for the intended terminal design.</p>
+
+<h2><span class="n">15</span>Target migration</h2>
+
+<p>The AI can develop with headroom and then search a measured target/configuration space. This is a rebuild-and-test workflow: changing <code>-m</code> does not turn a Mega2560 executable into ATtiny firmware. Different instruction sets, peripherals, interrupt vectors, clocks and ABI assumptions must be accounted for. The candidate set is the intersection of toolchain support, compiled simavr cores and available platform adapters. <span class="tag n">2.1</span> And of what Protoduino itself compiles for: at the pinned revision its clock header accepts the ATmega328, 168 and 88 families only (PD17).</p>
+
+<table class="tight">
+  <thead><tr><th style="width:20%">Stage</th><th>Required output</th></tr></thead>
+  <tbody>
+    <tr><td>Freeze behaviour</td><td>Protocol examples, state transitions, error cases, deadlines and required/optional features; record the assertion set.</td></tr>
+    <tr><td>Establish baseline</td><td>Passing scenarios and resource report on an explicit development profile.</td></tr>
+    <tr><td>Select candidate</td><td>Exact MCU identifier, profile revision, peripheral mapping and target-specific build flags.</td></tr>
+    <tr><td>Build and inspect</td><td>Link map and section sizes; diagnose over-budget code, buffers, missing peripherals or unsupported instructions.</td></tr>
+    <tr><td>Optimise</td><td>Consider smaller queues, compact data, reduced diagnostics, shared state and algorithm changes. Record tradeoffs.</td></tr>
+    <tr><td>Replay and compare</td><td>Check equivalent observable behaviour with target-specific timing limits and transports.</td></tr>
+    <tr><td>Rank qualified targets</td><td>Report flash/RAM headroom, observed stack reserve, latency and unsupported physical aspects. Reject infeasible choices explicitly.</td></tr>
+  </tbody>
+</table>
+<p><strong>Test abstraction.</strong> Express tests as logical input/output actions, then map them to each target: a serial packet on a Mega may become a test-harness input to a pure controller function on a device without the same UART. State clearly when the transport differs. A component-only success is not a success for the complete terminal-enabled application. Use target-specific deadline assertions rather than expecting identical instruction counts. Preserve input ordering, required results and failure behaviour. Sweep boundary values and queue pressure before reducing capacities. Select headroom policies explicitly; a minimal linkable image with no runtime reserve is not a deployable result.</p>
+<p><strong>Evidence for design decisions.</strong> Produce a candidate matrix with exact builds and rejected-target reasons. Keep acceptance tests stable while the model modifies implementation. Changing a required feature or relaxing a deadline is a requirements decision, not an optimisation. Report &ldquo;smallest among tested candidates&rdquo; unless the search exhaustively covers the defined candidate space.</p>
+<p><span class="tag n">2.1</span> <strong>A worked instance exists.</strong> The loader work builds one bootloader source for four parts and fills each boot section with as many options as fit, by building and measuring: 2,042 of 2,048 bytes on the ATmega328P, nothing in 2 KB on the ATmega2560, everything in 4 KB. Its <code>fit.sh</code> is a small resource-frontier search of the kind this section describes, and its result table states which candidates were rejected and why.</p>
+
+<h2><span class="n">16</span>Vnode terminal UI</h2>
+
+<p>The intended AVR TUI retains a tree or arena of elements, text references/content, layout state and invalidation metadata. Rendering emits ANSI/VT cursor, style, text and clear operations over UART. The terminal holds the displayed screen. A host reference terminal may maintain a full screen buffer for testing, without imposing that memory requirement on the AVR. [S9]</p>
+
+<table class="tight">
+  <thead><tr><th style="width:22%">Concern</th><th>Required design behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>Identity and lifetime</td><td>Stable element identity; explicit ownership and lifetime of referenced strings and scroll buffers.</td></tr>
+    <tr><td>Invalidation</td><td>Detect text edits, property changes, insertion/removal and movement. Retain enough old geometry or repaint an enclosing region.</td></tr>
+    <tr><td>Overlap and clearing</td><td>Clear vacated cells, redraw exposed siblings/backgrounds and define z-order and clipping.</td></tr>
+    <tr><td>Transport</td><td>Handle partial writes and backpressure without losing UTF-8 bytes or control sequences. Retain progress across yields if required. <span class="tag n">2.1</span> Output that reaches the pipe is not yet output on the wire: the serial device process leaves bytes in its pipe until it is polled again (PD15), and the UART ring behind it is 16 bytes (PD12).</td></tr>
+    <tr><td>Unicode</td><td>Choose and document supported display-width semantics. Bytes, Unicode code points and terminal columns are different quantities.</td></tr>
+    <tr><td>Host testing</td><td>Parse emitted VT bytes, reconstruct the terminal, compare regions/cursor/style and retain evidence.</td></tr>
+  </tbody>
+</table>
+<p>The inspected implementation uses 16-bit appearance signatures and a command queue. Text signatures include pointer and length rather than text content. Removal of trailing elements is not detected by the shown damage pass when remaining geometry is unchanged. Direct box-character writes ignore partial pipe writes. These are concrete review items, not reasons to adopt an AVR framebuffer. [S9; PD05 to PD07]</p>
+<p><strong>Required scenarios.</strong> Replace &ldquo;ON&rdquo; with &ldquo;NO&rdquo; in the same buffer; shrink text; clear an entire tree; remove the last child; move and resize an overlay. Render while the TX pipe has one byte free; split a three-byte box glyph; saturate and resume the renderer; verify no output was discarded. Exercise nested clipping and parent repaints; test multibyte text, invalid UTF-8, wide and combining characters according to the selected policy. Verify that an unchanged frame emits no unnecessary redraw and that a full resynchronisation can recover after a terminal reconnect.</p>
+<p class="small">One rune per cell is an explicit limitation of the current clipping helper, not general Unicode terminal correctness. Full grapheme shaping is not implied. The earlier 13,440-byte screen-cell estimate is not a requirement for this architecture.</p>
+
+<h2><span class="n">17</span>Native modules <span class="tag n">2.1</span></h2>
+
+<p>There are two different deliverables: a bootloader that accepts a linked image and a runtime module loader that manages independently compiled code. ELF32 describes a file format, not a 32-bit CPU requirement. Edition 2.0 planned both in four stages and noted that the existing guide, <code>docs/loader.md</code>, is not an executable design (PD10). Since then a design with running code exists. This section is rewritten around it; the stage plan is kept as the frame.</p>
+
+<table>
+  <thead><tr><th style="width:21%">Stage</th><th style="width:33%">Scope of edition 2.0</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td><strong>L0</strong> whole firmware</td><td>Continue using the normal compiled-image load/reset path. Do not describe this as live module replacement.</td><td>A serial bootloader takes the unmodified <code>.elf</code> as a stream, over XMODEM-CRC from any terminal program. It checks the file from its headers, refuses before it erases, and makes an image valid only by a record written last. 2,014 bytes on the ATmega328P. 13 scenarios pass in simavr, including a 106 KB image on the ATmega2560. <span class="tag m">executed</span></td></tr>
+    <tr><td><strong>L1</strong> host-linked package</td><td>Link for a reserved flash slot on the host; include initialised data, zero-fill requirements, entry and ABI metadata. The device validates and writes the image.</td><td>Done, with the ELF file as the package. A module is a Protoduino process type linked for a slot against the symbols of one kernel build; its first bytes are a descriptor with magic, ABI version and the kernel's identity. 9 scenarios pass on the unmodified scheduler, also with a stock Optiboot 8.3 as the bootloader. <span class="tag m">executed</span></td></tr>
+    <tr><td><strong>L2</strong> bounded ELF object support</td><td>Accept selected <code>ET_REL</code> inputs only after defining supported sections, relocation kinds, import resolution, alignment and rejection behaviour.</td><td>Not done and argued against: linking on the device is what made Contiki's loader large and is why Contiki-NG removed it. Proposed in its place: slots aligned to 512 bytes and a sorted list of high-byte fix-ups applied as the stream passes, so one file loads into any slot without a relocator. <span class="tag p">proposed</span></td></tr>
+    <tr><td><strong>L3</strong> lifecycle / replacement</td><td>Quiesce owned processes, callbacks, timers and messages; remove stale references; commit replacement only after validation.</td><td>Partly: a module table written after validation, start through <code>process_new()</code>, restart after reset, a second module beside a running one. Missing: stop, unload, replacement, and everything PD01, PD02 and PD04 stand in the way of.</td></tr>
+  </tbody>
+</table>
+
+<p>On the classic Mega-style target, native instructions execute from program flash. A RAM buffer may stage incoming bytes but cannot become ordinary native instruction memory. A real loader needs the applicable self-programming path and boot-region permissions. Direct simulator flash modification is useful for diagnosis but does not test that device path. [R4]</p>
+
+<h4>How the loader meets the package and lifecycle contract of edition 2.0</h4>
+<table class="tight">
+  <thead><tr><th style="width:27%">Contract item</th><th>In the loader</th><th style="width:11%">Met</th></tr></thead>
+  <tbody>
+    <tr><td>Format/version</td><td>The ELF header itself, checked by 17 fixed-value rules; module magic and ABI byte</td><td>yes</td></tr>
+    <tr><td>Target-profile compatibility</td><td>Core family from the ELF flags against the build; optionally the device signature</td><td>yes</td></tr>
+    <tr><td>Runtime ABI identifier</td><td>CRC-16 of the kernel image, computed by the kernel and carried by the module; a mismatch is refused before the first page is programmed</td><td>yes</td></tr>
+    <tr><td>Section layout, entry point</td><td>Program headers; the entry point is the address of the descriptor</td><td>yes</td></tr>
+    <tr><td>Data initialisation, zero-fill</td><td>A module has no static data. Its state is the process struct the kernel allocates; the module linker script fails the build otherwise.</td><td>by exclusion</td></tr>
+    <tr><td>Imports/exports</td><td>Resolved on the host against the kernel's symbol addresses; nothing on the device</td><td>yes</td></tr>
+    <tr><td>Integrity check</td><td>CRC-16 per XMODEM block in transit; CRC of the firmware image in its record. No checksum of a module is kept after programming.</td><td>partly</td></tr>
+    <tr><td>Bounds and protected regions</td><td>A window per load: a module can touch its slot only; the kernel image was verified unchanged after every load</td><td>yes</td></tr>
+    <tr><td>Authenticity</td><td>Not designed; one descriptor byte is reserved for it</td><td>no</td></tr>
+    <tr><td>States validated, staged, programmed, initialised, running, stopping, unloaded/failed</td><td>Refused, programmed, listed in the module table, running. No stopping or unloaded state.</td><td>partly</td></tr>
+    <tr><td>Symbols registered with GDB on load, removed on unload</td><td>Not done; straightforward (10)</td><td>no</td></tr>
+  </tbody>
+</table>
+
+<p><strong>What it adds beyond the contract.</strong> The load is one Protothreads v2 thread that does no I/O. The bootloader schedules it at reset; a Protoduino process schedules the same code, where it sits in the boot section, while the system runs. Loading therefore does not stop the scheduler: a heartbeat process took 18,053 turns during a 350 ms load. And the same thread loads through Optiboot's <code>do_spm</code> when the kernel links its own copy, so a board keeps its bootloader.</p>
+
+<div class="box warn">
+<h4>What simulation cannot show about a loader</h4>
+<p>The loader goes through the firmware path, as edition 2.0 demands. That is still not hardware evidence, for a reason edition 2.0 does not name: simavr executes SPM from anywhere, replaces a page without an erase, has no read-while-write lockout and programs in no time (AV02 to AV05). A loader that forgot the erase, forgot to re-enable the application section, did not wait, or ran outside the boot section would pass every one of the 22 scenarios. A strict flash mode in Protosim that reports those four would turn blind spots into test failures; it is the most valuable single addition for stage G5.</p>
+</div>
+
+<p class="small">Full design, measurements and code: <code>protoduino/docs/elf-loader-design.pdf</code> and <code>protoduino/docs/elfloader/</code>. The code sits beside the library at the paths it would have in it; no library source file was changed.</p>
+
+<h2><span class="n">18</span>Verification and evidence</h2>
+
+<p><strong>A reproducible experiment bundle.</strong> Capture repository commits and dirty-patch hashes; dependency pins; compiler/linker/GDB versions; flags and feature configuration; profile/linker-script hashes; ELF and loadable-image hashes; scenario version; initial memory/peripheral policy; input payloads with actual delivery cycles; stop events; assertions; terminal capture; and resource measurements. Large traces remain artefacts; the model receives focused excerpts and references.</p>
+
+<table>
+  <thead><tr><th style="width:18%">Suite</th><th>Minimum release evidence</th></tr></thead>
+  <tbody>
+    <tr><td>Doctor</td><td>Schema-valid stdout; missing tools and timeouts; config precedence; secret redaction; clean temporary smoke-test teardown.</td></tr>
+    <tr><td>Termination <span class="tag n">2.1</span></td><td>Every way a run can end, on every UART mode: exit code, signal and reported stop reason agree, and none of them is a signal the process sent itself.</td></tr>
+    <tr><td>Debugger</td><td>Connect, breakpoint, condition, watch, step, pause, inspect and teardown; malformed/lost responses; address boundaries and optimised-code behaviour.</td></tr>
+    <tr><td>Instrumentation</td><td>No counts while stopped; correct instruction/cycle distinction; high-flash coverage; interrupt and nested call accounting.</td></tr>
+    <tr><td>MCP</td><td>Existing batch compatibility; persistent state; cancellation; concurrent requests; argument handling; client disconnect and process cleanup.</td></tr>
+    <tr><td>Protoduino</td><td>Queue full/empty/wrap; cleanup with no incoming events; poll traversal under finalisation; message ownership and restart generations. <span class="tag n">2.1</span> Events under continuous polls; output of the serial process without further polls.</td></tr>
+    <tr><td>TUI</td><td>Content mutation, removed elements, old bounds, partial output and width policy; compare UART reconstruction with expected terminal state.</td></tr>
+    <tr><td>Migration / loader</td><td>One behaviour contract on two qualified profiles; loader rejection and recovery; high-address suite before 1 MiB qualification. <span class="tag n">2.1</span> The loader's T1 to T13 and M1 to M9 through Protosim and MCP.</td></tr>
+  </tbody>
+</table>
+
+<p><span class="tag n">2.1</span> <strong>An independent reader as oracle.</strong> The strongest check in the loader work costs one line: after the firmware under test has written flash, compare it with what simavr's own ELF reader produces for the same file. Two implementations that agree on 106 KB of image are unlikely to share a bug. Protosim should offer it as <code>--expect-flash &lt;file.elf&gt;</code> and as the <code>flash_compare</code> tool; it needs honest exit codes to be of use in CI.</p>
+<p>Replay reproducibility requires controlling external inputs. Record the cycle when each byte/event is applied, not only host arrival time. Queue host input while paused according to policy. Seed any randomness and define initial RAM/EEPROM values. Different host scheduling or peripheral models may prevent bit-identical replay; report the declared reproducibility level.</p>
+<p>Compiler success, debugger stop status and test verdict are separate records. Use reference fixtures and preserved assertions to avoid a model &ldquo;fixing&rdquo; the tests to accept a regression. Resource results identify scenario coverage; they are not proof of all possible execution paths. Hardware measurements remain a separate qualification layer.</p>
+<p class="small">Performance metrics should separate build duration, simulated cycles per host second, tool latency, trace volume and model tokens. Publish task completion rates only after a reproducible benchmark protocol and baseline exist.</p>
+
+<h2><span class="n">19</span>Providers and hardware</h2>
+
+<p><strong>Provider independence.</strong> For Claude Code and Codex, the coding client already manages model inference, context and source edits. Protosim MCP exposes deterministic tools and evidence. A future custom client can use OpenRouter, direct APIs or a local model adapter; it should reuse the controller contract. Named models are user examples, not fixed implementation dependencies or promises of availability through a particular endpoint. A standalone provider adapter should declare tool-call support, context/output limits, cancellation and retry behaviour. It records the requested/resolved model identifiers and usage where exposed. It must not silently repeat state-changing tool operations after uncertain delivery. Model-specific prompting stays outside simulator semantics and acceptance tests.</p>
+<p><strong>Physical AVR debugging.</strong> A supported device and probe may expose on-chip debug access without adding a firmware agent. The chosen GDB-compatible server bridges to the hardware interface. Interface/probe/device support must be verified per target; JTAG, debugWIRE and UPDI cover different AVR families and configurations. [R9]</p>
+
+<table class="tight">
+  <thead><tr><th style="width:19%">Aspect</th><th>Simulation</th><th>Physical target</th></tr></thead>
+  <tbody>
+    <tr><td>Memory access</td><td>Host-owned modelled state; explicit stopped snapshots are straightforward.</td><td>Depends on the probe, MCU and halt behaviour.</td></tr>
+    <tr><td>Time and environment</td><td>Can schedule virtual inputs and pause the modelled machine.</td><td>External equipment continues while the CPU is halted; peripheral behaviour varies.</td></tr>
+    <tr><td>Breakpoints and trace</td><td>Software-managed observations within implementation limits.</td><td>Hardware resources and transport rates may be limited.</td></tr>
+    <tr><td>Flash programming <span class="tag n">2.1</span></td><td>Permissive and instantaneous (AV02 to AV05).</td><td>Boot-section permission, erase before write, read-while-write lockout, 3.7 to 4.5 ms per erase and per write, lock bits and fuses.</td></tr>
+    <tr><td>Expanded profiles</td><td>Can explore virtual memory extensions after qualification.</td><td>Must match actual device/board memory and timing.</td></tr>
+    <tr><td>Reproduction</td><td>Reset plus a recorded virtual input scenario.</td><td>Requires fixtures and control over physical inputs; simulator replay alone is insufficient.</td></tr>
+  </tbody>
+</table>
+<p>Reuse the source/ELF decoders over a different memory-access backend where possible. Where hardware debugging is unavailable, an optional firmware stub or telemetry channel is a different integration requiring firmware changes. This does not alter the no-firmware-agent design for simulator inspection.</p>
+<p class="small">Qwenputer inspired the idea of coupling reasoning with execution. This toolbox executes AVR firmware externally in simavr. An AVR compiled into model weights or a MicroPython AVR port is independent research, not a prerequisite for the proposed development loop.</p>
+
+<h2><span class="n">20</span>Delivery roadmap</h2>
+
+<table>
+  <thead><tr><th style="width:21%">Gate / suggested owner</th><th>Scope</th><th style="width:28%">Exit evidence</th></tr></thead>
+  <tbody>
+    <tr><td><strong>G0: trustworthy baseline</strong><br><span class="small">Protosim + runtime maintainers</span></td><td>Pin repositories, reproduce findings, correct error reporting and measurement defects; define baseline fixtures. <span class="tag n">2.1</span> In this order: termination (PS11), exit codes (PS01), the MCP failure envelope (MC03, MC05), the step budget under GDB (PS02), the listener (PS07). Then the scheduler fixes PD01, PD02, PD03 and PD14, which every later gate stands on.</td><td>Known failures have regression cases. Baseline manifests are reproducible. <span class="tag n">2.1</span> The checks of section 29 run in CI on Linux.</td></tr>
+    <tr><td><strong>G1: environment doctor</strong><br><span class="small">CLI/controller owner</span></td><td>Check registry, configuration resolution, text/JSON modes, capability readiness and optional debug smoke test. <span class="tag n">2.1</span> With <code>--version</code> and <code>--help</code>.</td><td>New checkout diagnosis identifies actionable blockers; JSON remains valid on failure.</td></tr>
+    <tr><td><strong>G2: persistent GDB/MCP</strong><br><span class="small">Controller + simulator owners</span></td><td>MI parser, session lifecycle, bounded operations, UART, matching symbols and cleanup.</td><td>Claude Code and Codex complete the same breakpoint/inspect/resume workflow.</td></tr>
+    <tr><td><strong>G3: source/runtime evidence</strong><br><span class="small">Protoduino + controller owners</span></td><td>Process/queue/pipe/vnode decoding and replay bundles; TUI defect regressions. <span class="tag n">2.1</span> A measured answer to which builds carry usable debug information (10).</td><td>Host decoded state agrees with raw memory and produces a reviewable source fix.</td></tr>
+    <tr><td><strong>G4: profiles and migration</strong><br><span class="small">Toolchain/simulator owners</span></td><td>Stock profiles; qualified data64k profile; full-feature fixture; candidate comparison. <span class="tag n">2.1</span> Protoduino building for the ATmega2560 (PD17); boot sections in profiles.</td><td>Two targets pass a shared component contract with measured budgets.</td></tr>
+    <tr><td><strong>G5: runtime modules</strong><br><span class="small">Protoduino + host tooling owners</span></td><td>Host-linked package, ABI, flash programming and lifecycle; debugger symbols. <span class="tag n">2.1</span> L0 and L1 exist. Remaining: binary transfer and reset in Protosim (F15), the strict flash mode, unload and replacement, module symbols in GDB, hardware.</td><td>Load/run/stop/unload and negative recovery cases pass through the firmware path. <span class="tag n">2.1</span> And on an Uno and a Mega.</td></tr>
+    <tr><td><strong>G6: advanced options</strong><br><span class="small">Explicit research owners</span></td><td>1 MiB flash, bounded on-device ELF relocation, snapshots, hardware backend, optional standalone UI. <span class="tag n">2.1</span> Or the fix-up stream in place of on-device relocation.</td><td>Each feature has its own capability qualification and unsupported-case policy.</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Recommended scope of the first dependable release.</strong> Deliver doctor, truthful batch outcomes, persistent GDB sessions, basic UART interaction, source-linked results and one complete MCP demonstration on a stock MCU. Keep virtual-memory engineering as a parallel workstream only after baseline instrumentation is trustworthy. The agent workflow can be useful before the most ambitious memory and loader work is finished. <span class="tag n">2.1</span> Make the stock MCU the ATmega328P: everything in this edition ran on it, and Protoduino builds for it.</p>
+<p>Do not estimate completion dates solely from this document. Owners should validate toolchain availability and the defect reproductions, then estimate bounded milestones. The current MCP TypeScript code makes a TypeScript controller a practical default, subject to team review; GDB and simavr remain separate native components.</p>
+
+<h2><span class="n">21</span>Design decisions</h2>
+
+<table>
+  <thead><tr><th style="width:24%">Decision</th><th>Recommendation / rationale</th></tr></thead>
+  <tbody>
+    <tr><td>Execution ownership</td><td>One controller owns GDB and simulator control per instance. A second UI attaches through it, not as an independent command source.</td></tr>
+    <tr><td>Simulator side channel</td><td>Small versioned local endpoint for budgets, scheduled I/O and metrics; keep GDB for source debugging.</td></tr>
+    <tr><td>Session lifetime</td><td>Start with stdio-owned child processes and clean shutdown. Add a reattachable daemon only when a demonstrated workflow needs it.</td></tr>
+    <tr><td>Target qualification</td><td><span class="tag n">2.1</span> Stock ATmega328P first, then stock Mega2560 once Protoduino builds for it; virtual data64k next; 1 MiB flash experimental until its boundary suite passes.</td></tr>
+    <tr><td>TUI correctness</td><td>Explicit dirty/content-generation and removal invalidation; bounded metadata, no mandatory AVR framebuffer.</td></tr>
+    <tr><td>Module scope</td><td><span class="tag n">2.1</span> Host-linked ELF in a slot, as built. Decide between the fix-up stream and an on-device relocator before either is started; decide whether a module checksum is stored.</td></tr>
+    <tr><td>Protocol compatibility</td><td>Version schemas; expose capabilities; preserve existing tools and CLI behaviour except clearly documented bug fixes.</td></tr>
+    <tr><td>Error semantics</td><td>Separate tool failures, simulator stop reasons and test assertions. Never infer correctness only from exit code or UART text.</td></tr>
+    <tr><td>One server build <span class="tag n">2.1</span></td><td>Build the MCP server in one place and stop committing compiled copies; let the package bundle from that build.</td></tr>
+    <tr><td>Simulator fidelity <span class="tag n">2.1</span></td><td>Fix the deviations that hide firmware bugs (AV02 to AV05) behind a strict mode in Protosim rather than patching the pinned simavr, and record the mode in the evidence bundle.</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Ambitious additions with concrete value.</strong> Failure minimisation: reduce a failing input trace to the shortest reproducer while preserving the assertion failure. Resource-frontier search: explore target/configuration combinations and report measured Pareto tradeoffs. Runtime explanation: join process/queue snapshots with the source and terminal at the same stop. Cross-build comparison: highlight changed behaviour and budgets for the same scenario. These are proposed extensions, not current capabilities.</p>
+<p><strong>Success measures.</strong> Measure time from a clean checkout to the first successful debug session; percentage of scenario runs with complete provenance; reproducibility of failures; verified fix rate on a curated defect set; resource savings without requirement loss; and rate of incorrectly reported success. Compare AI-assisted and manual workflows using the same fixtures, environment and completion criteria. <span class="tag n">2.1</span> The curated defect set now has 57 entries with a trigger each (22 to 28).</p>
+<p class="small">The product goal is a distinctive AI toolbox. The defensible claim is the combination of capabilities and measured outcomes; &ldquo;one of a kind&rdquo; should remain a positioning ambition until supported by comparative research.</p>

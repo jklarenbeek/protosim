@@ -1,0 +1,78 @@
+protosim 6fadc6f | avr-gcc (GCC) 7.3.0 | GNU gdb (GDB) 15.0.50.20240320-git | node v22.23.4
+
+== 1. how a run ends (PS01, PS11, PS12) ==
+step limit, default UART bridge:
+returncode -2 (killed by signal 2) | output 332 bytes
+    [DBG] MAX-STEPS (2000) reached — stopping.
+step limit, --uart0-out:
+returncode 0  | output 167 bytes
+    [DBG] MAX-STEPS (2000) reached — stopping.
+UART match:
+returncode 0  | output 192 bytes
+    [DBG] SUCCESS: Match '--exit-on-uart end' found. Exiting correctly.
+UART match never comes:
+returncode 1  | output 224 bytes
+--help:
+returncode 1  | output 79 bytes
+Cannot load ELF --help
+
+== 2. SRAM dump outside the modelled memory (PS05) ==
+returncode -11 (killed by signal 11) | output 265 bytes
+
+== 3. boot HEX parser (PS09, PS10) ==
+bad-checksum.hex -> return=0 base=0x0 size=1 first=0xaa last=0xaa
+segment.hex   -> return=0 base=0x10010 size=1 first=0xaa last=0xaa
+after-eof.hex -> return=0 base=0x0 size=17 first=0x55 last=0x77
+short-line.hex -> return=0 base=0x0 size=2 first=0x11 last=0xf0
+non-hex.hex   -> return=0 base=0x0 size=1 first=0x33 last=0x33
+
+== 4. a debug session: avr-gdb in MI mode against protosim -d (section 07, PS07, AV01) ==
+protosim says: avr_gdb_init listening on port 1234 | GDB server listening on port 1234
+second instance says: GDB server listening on port 1234
+connect: ^connected
+break main: addr=0x000000e6 line=17
+continue -> breakpoint-hit func=main line=17
+counter = 4660 (0x1234 = 4660 expected after start-up)
+banner[0] (a flash constant) = 104 'h' (104 'h' expected)
+frames: ^done,stack=[frame={level="0",addr="0x000000e6",func="main",file="firmware.c",fullname="/home/user/protosim/do...
+next -> end-stepping-range line=18
+stepi -> end-stepping-range addr=0x000000f2
+PC register: ^done,register-values=[{number="34",value="0xf2"}]
+watch counter: ^done,wpt={number="2",exp="counter"}
+continue -> watchpoint-trigger *stopped,reason="watchpoint-trigger",wpt={number="2",exp="counter"},value={old="4660",new="4764"},frame={addr="0x00000130",func="main",args=[],file="f...
+read flash byte 0x7ffe: ^done,memory=[{begin="0x00007ffe",offset="0x00000000",end="0x00007fff",contents="ff"}]
+read flash byte 0x7fff: ^error,msg="Unable to read memory."
+read last RAM byte: ^done,memory=[{begin="0x008008ff",offset="0x00000000",end="0x00800900",contents=...
+interrupt while running ->  RESULT RECORD | NO *stopped RECORD
+SIGINT to gdb -> *stopped,reason="signal-received",signal-name="SIGINT",signal-meaning="Interrupt",frame={a...
+protosim output while the CPU is stopped for 2 s: GDB hit control-c | GDB hit control-c
+protosim alive: True returncode None
+-- ATmega2560
+connect: ^connected
+break main: addr=0x0000016a line=17
+continue -> breakpoint-hit func=main line=17
+continue -> watchpoint-trigger *stopped,reason="watchpoint-trigger",wpt={number="2",exp="counter"},value={old="4660",new="4764"},frame={addr="0x000001b4",func="main",args=[],file="f...
+read flash byte 0x3fffe: ^done,memory=[{begin="0x0003fffe",offset="0x00000000",end="0x0003ffff",contents="ff"}]
+read flash byte 0x3ffff: ^error,msg="Unable to read memory."
+
+== 5. listener address, async interrupt (PS07, section 07) ==
+1. connect to the debug port on the non-loopback address 192.0.2.2 : accepted
+3. mi-async on: -exec-interrupt -> ^done | *stopped,reason="signal-received",signal-name="SIGINT",signal-meaning="Interrupt",frame={addr="0x000...
+
+== 6. the step budget while the CPU is stopped in the debugger (PS02) ==
+--max-steps 700: stopped at main (pc 0xe6); after 18.3 s without a single instruction: [DBG] MAX-STEPS (700) reached — stopping. | simulator still running: False
+
+== 7. the MCP server over stdio: dist/index.js (MC01 to MC05, MC07) ==
+server: {"name":"protosim-mcp","version":"1.0.0"} protocol 2024-11-05
+tools: init_arduino_project, compile_firmware, run_simulation
+--- A. headless, ends on a UART match (protosim exits 0): isError=false (33 ms, 5101 chars)
+{"breakpoints_hit":{},"coverage_total":"0.4%","hot_path":null,"full_output_chars":4755}
+--- B. step limit, default UART bridge (the documented use): isError=false (28 ms, 451 chars)
+Execution completed or errored:
+--- C. firmware path with a space: isError=false (8 ms, 163 chars)
+Execution completed or errored:
+Cannot load ELF <tmp>/dir
+--- D. init_arduino_project on an existing Mega project: isError=false (1 ms, 145 chars)
+Initialized PlatformIO project at <tmp>/proj. 
+--- E. max_steps 0 on firmware that never ends: isError=false (10001 ms, 35 chars) NO ANSWER within 10 s
+D left: platformio.ini = [env:mega] platform = atmelavr board = uno framework = arduino | src/main.cpp starts with: #include <Arduino.h>

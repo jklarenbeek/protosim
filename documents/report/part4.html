@@ -1,0 +1,151 @@
+<h2><span class="n">29</span>Checks executed</h2>
+
+<h3><span class="n">29.1</span>For this edition <span class="tag n">2.1</span></h3>
+<p>Everything in this table was run. The Protosim and MCP checks are in <code>documents/checks/</code> of this repository and reproduce with one command; the Protoduino and simavr checks are in the Protoduino repository beside the loader work.</p>
+
+<table>
+  <thead><tr><th style="width:24%">Check</th><th>What ran</th><th style="width:34%">Observed</th></tr></thead>
+  <tbody>
+    <tr><td>How a run ends<br><span class="small">PS01, PS11, PS12</span></td><td>Protosim on a fixture, per ending and UART mode, with the real exit status and signal</td><td>Step limit on the default bridge: killed by signal 2. The same with <code>--uart0-out</code>: 0. UART match: 0. Match never comes: 1. <code>--help</code>: &ldquo;Cannot load ELF --help&rdquo;.</td></tr>
+    <tr><td>Out-of-range dump<br><span class="small">PS05</span></td><td><code>--dump-sram 0x7ff00000:16</code> at a breakpoint</td><td>Killed by signal 11</td></tr>
+    <tr><td>Boot HEX parser<br><span class="small">PS09, PS10</span></td><td><code>protosim_read_ihex()</code> in a native driver on five fixtures</td><td>Bad checksum, data after EOF, short line and non-hex digits: all return 0. Type-02 record: base <code>0x10010</code>, not <code>0x10020</code>.</td></tr>
+    <tr><td>Debug session<br><span class="small">07, PS07, AV01</span></td><td>avr-gdb 15.0.50, MI mode, against <code>protosim -d</code>, ATmega328P and ATmega2560</td><td>The table of section 07. A second instance on the port says &ldquo;listening&rdquo;. The port accepts a connection on a non-loopback address. The last flash byte cannot be read.</td></tr>
+    <tr><td>Step budget while stopped<br><span class="small">PS02</span></td><td><code>-d --max-steps 700</code>, stop at <code>main</code>, wait</td><td>&ldquo;MAX-STEPS (700) reached&rdquo; after 18.3 s without one instruction; the simulator exits under the debugger</td></tr>
+    <tr><td>MCP server<br><span class="small">MC01 to MC05, MC07</span></td><td>The server over stdio from a minimal client: the committed bundle and a fresh <code>tsc</code> build</td><td>Headless run: <code>breakpoints_hit</code> empty, <code>hot_path</code> null, coverage parsed. Step-limited run: error path, <code>isError</code> false. Path with a space split. Existing Mega project overwritten with <code>board = uno</code>. <code>max_steps</code> 0: no answer in 10 s.</td></tr>
+    <tr><td>Bootloaders and input<br><span class="small">PS08, PS13 to PS17, PS19</span></td><td>Protosim with <code>--bootloader</code>, HEX and ELF, <code>--uart0-in</code>, a watchdog reset, profiling</td><td>As listed in section 23. Recorded in <code>protoduino/docs/elfloader/prototype/results-simulators.txt</code>.</td></tr>
+    <tr><td>simavr model<br><span class="small">AV02 to AV09</span></td><td>Small AVR programs in simavr: SPM from address 0, write without erase, read after write, UART overrun, reset</td><td>As listed in section 25. Same result file; sources in <code>prototype/simprobes/</code>.</td></tr>
+    <tr><td>Protoduino scheduler<br><span class="small">PD01, PD02, PD14, PD21</span></td><td>Sketches on the unmodified library in simavr: a process that ends; two processes polled, the first ending; a self-polling process; a kernel with a heartbeat during a module load, with and without the change to <code>process_run()</code></td><td>As listed in section 26. <code>prototype/probes/run_probes.sh</code>, <code>results-library.txt</code>, <code>results-modules.txt</code>.</td></tr>
+    <tr><td>Protoduino serial path and build<br><span class="small">PD08, PD09, PD11 to PD13, PD15 to PD20</span></td><td>The same probes, and compiles with avr-gcc for ATmega328P and ATmega2560</td><td>As listed in sections 27 and 28</td></tr>
+    <tr><td>Loader<br><span class="small">17</span></td><td>13 firmware scenarios and 9 module scenarios in simavr, flash compared with simavr's own ELF reader</td><td>All 22 as designed. <code>results-tests.txt</code>, <code>results-modules.txt</code>.</td></tr>
+  </tbody>
+</table>
+<pre><code><span class="c"># in this repository: Protosim, the debugger and the MCP server</span>
+documents/checks/run_checks.sh          <span class="c"># writes documents/checks/results.txt</span>
+
+<span class="c"># in the Protoduino repository: the library, simavr's model, the loader</span>
+cd docs/elfloader/prototype
+./make_fixtures.sh &amp;&amp; probes/run_probes.sh &amp;&amp; ./run_tests.sh &amp;&amp; ./run_modules.sh</code></pre>
+
+<h3><span class="n">29.2</span>Isolated checks of edition 2.0</h3>
+<p>The review of edition 2.0 executed small host programs using the unchanged custom HEX parser or extracted current functions, plus exact JavaScript regex literals from the MCP source. Minimal host structures/stubs isolated the relevant logic. These checks establish the listed local behaviour; they do not establish complete AVR firmware behaviour or overall simulator correctness.</p>
+
+<table class="tight">
+  <thead><tr><th style="width:17%">Check</th><th>Fixture / expected result</th><th style="width:27%">Observed in 2.0</th><th style="width:19%">In 2.1</th></tr></thead>
+  <tbody>
+    <tr><td>HEX checksum</td><td>Data record <code>:01000000AA00</code> has an invalid checksum; parser should reject it.</td><td>Accepted: return 0, base 0, length 1, first <code>0xAA</code>.</td><td>The same <span class="tag m">executed</span></td></tr>
+    <tr><td>HEX type-02 address</td><td>Segment <code>0x1001</code> and offset <code>0x0010</code> should address <code>0x10020</code>.</td><td>Parser reported <code>0x10010</code>, matching bitwise OR.</td><td>The same <span class="tag m">executed</span></td></tr>
+    <tr><td>Text signature</td><td>Same text pointer/length; buffer changes from AA to BB.</td><td>Signature equality remained true.</td><td>Not re-run</td></tr>
+    <tr><td>Trailing-node damage</td><td>Current fixed root unchanged; previous frame had one extra trailing child.</td><td><code>dirty_any=0</code> and <code>root_dirty=0</code>.</td><td>Not re-run</td></tr>
+    <tr><td>Poll traversal</td><td>Two linked pending processes; dispatch finalises/unlinks the first.</td><td>One dispatched; second <code>needs_poll=1</code>; <code>poll_requested=0</code>.</td><td>The same on the simulated AVR with the whole library <span class="tag m">executed</span></td></tr>
+    <tr><td>Breakpoint parser</td><td>Feed current BREAKPOINT HIT text to the exact MCP breakpoint regex.</td><td>No match.</td><td>The same through the running server <span class="tag m">executed</span></td></tr>
+    <tr><td>Hot-path parser</td><td>Feed a normal <code>[CG] Hot Path</code> header and following path line to the exact regex.</td><td>No match.</td><td>The same through the running server <span class="tag m">executed</span></td></tr>
+  </tbody>
+</table>
+<p><strong>Portable reproduction recipes.</strong> For the segment case, write the records below to a file and call <code>protosim_read_ihex</code> directly in a small native C driver that prints return code, base and length. This exercises the custom bootloader parser, not the main firmware HEX parser imported from simavr.</p>
+<pre><code>:020000021001EB
+:01001000AA45
+:00000001FF</code></pre>
+<p>For the TUI checks, retain <code>_element_sig</code> and <code>_compute_damage</code> with minimal equivalent fields and a stable fixed root. Move these narrow cases into the repository's real native/AVR suites before merging fixes.</p>
+<p class="small">No repository source was changed by either review. The reports' examples and findings are intended to guide implementation and regression work.</p>
+
+<h2><span class="n">30</span>Source index</h2>
+
+<p class="small">Repository references are pinned to the reviewed revisions of section 02. Line references in findings refer to these snapshots.</p>
+<table class="tight">
+  <thead><tr><th style="width:7%">Key</th><th style="width:30%">Subject</th><th>Files</th></tr></thead>
+  <tbody>
+    <tr><td>[S1]</td><td>Protosim execution and loading</td><td><code>src/protosim.c</code>: main loop, configuration, GDB initialisation, memory copies and stop handling. Also <code>src/ihex_loader.c</code>, <code>src/stk500_uploader.c</code>, <span class="tag n">2.1</span> <code>src/uart_pty.c</code>.</td></tr>
+    <tr><td>[S2]</td><td>Protosim diagnostics</td><td><code>src/debug.c</code>: breakpoint logging, SRAM/watch dumps, SREG formatting and symbol lookup.</td></tr>
+    <tr><td>[S3]</td><td>Protosim measurements</td><td><code>src/profiling.c</code>: coverage allocation, callgraph and cycle accounting. Also <code>include/protosim_core.h</code>.</td></tr>
+    <tr><td>[S4]</td><td>Existing MCP server</td><td><code>mcp-server/src/index.ts</code>: tool schemas, subprocess invocation, project generation and output parsing. Also <code>package.json</code>, <code>tsconfig.json</code>, <code>scripts/protosim-mcp.sh</code>, <span class="tag n">2.1</span> <code>packaging/nfpm.yaml</code>, <code>mcp-server/dist/index.js</code>, <code>SKILL.md</code>.</td></tr>
+    <tr><td>[S5]</td><td>Pinned simavr debugger and core</td><td><code>simavr/sim/sim_gdb.c</code>: read/write packet handling, watchpoints and listener setup. Also <code>sim_avr.h/c</code>, <code>sim_core.c</code>, <span class="tag n">2.1</span> <code>avr_flash.c</code>, <code>avr_uart.c</code>, <code>sim_elf.c</code>.</td></tr>
+    <tr><td>[S6]</td><td>Mega2560 device model</td><td><code>simavr/cores/sim_mega2560.c</code> and <code>.h</code>. AVR-LibC <code>iom2560.h</code> confirms RAMSTART <code>0x0200</code>, RAMEND <code>0x21FF</code>, XRAMEND <code>0xFFFF</code> and FLASHEND <code>0x3FFFF</code>.</td></tr>
+    <tr><td>[S7]</td><td>Protoduino scheduler and continuations</td><td><code>src/sys/process.c</code>, <code>process.h</code>, <code>process.conf.h</code>, <code>protoduino-config.h</code>, <code>lc.h</code>, <code>lc-switch.h</code>, <code>lc-addrlabels.h</code>, <span class="tag n">2.1</span> <code>pt.h</code>, <code>cc.h</code>.</td></tr>
+    <tr><td>[S8]</td><td>IPC pools and pipes</td><td><code>src/sys/ipc.c</code>, <code>ipc.h</code>, <code>ipc.conf.h</code>, <span class="tag n">2.1</span> <code>pt/pipe.h</code>.</td></tr>
+    <tr><td>[S9]</td><td>TUI layout and rendering</td><td><code>src/lib/tui/tui_layout.c</code>, <code>tui_render.c</code>, <code>tui.h</code>, <code>docs/tui.md</code>, <code>docs/tui-roadmap.md</code>. Findings use implementation, not roadmap claims alone.</td></tr>
+    <tr><td>[S10]</td><td>Memory and Unicode assumptions</td><td><code>src/sys/mem.c</code>, <code>src/lib/text/rune16.c</code>, <code>platformio.ini</code>.</td></tr>
+    <tr><td>[S11]</td><td>Loader proposal</td><td><code>docs/loader.md</code>: experimental compilation/package instructions; not an implemented loader.</td></tr>
+    <tr><td>[S12] <span class="tag n">2.1</span></td><td>Serial path and loader work</td><td><code>src/cpu/avr/uart*.{h,c}</code>, <code>src/sys/serial*</code>, <code>src/sys/process/serial*</code>, <code>src/sys/clock.h</code>; and <code>docs/elf-loader-design.pdf</code> with <code>docs/elfloader/overlay/</code> and <code>docs/elfloader/prototype/</code> on the branch named in section 02.</td></tr>
+  </tbody>
+</table>
+<p class="small">The Protoduino submodule pinned in Protosim differs from the standalone revision used for the Protoduino findings and is not initialised in a fresh checkout. Findings for standalone Protoduino must be checked separately against that pin.</p>
+
+<h2><span class="n">31</span>Official technical references</h2>
+<ul class="src">
+  <li>[R1] GDB/MI specification</li>
+  <li>[R2] GDB symbols and file/section registration</li>
+  <li>[R3] GDB optimised-code limitations</li>
+  <li>[R4] ATmega640/1280/1281/2560/2561 datasheet, DS40002211A</li>
+  <li>[R5] GCC AVR options and EIND/trampoline conventions</li>
+  <li>[R6] Codex MCP configuration, official OpenAI documentation</li>
+  <li>[R7] Claude Code MCP configuration</li>
+  <li>[R8] AVR-LibC program-space utilities</li>
+  <li>[R9] Microchip AVR device debug interfaces</li>
+  <li>[R10] <span class="tag n">2.1</span> ATmega48A/88A/168A/328P datasheet, &ldquo;Self-Programming the Flash&rdquo;: boot-section permission, erase before write, read-while-write, 3.7 to 4.5 ms per operation. Optiboot 8.3 source for <code>do_spm</code>. The Model Context Protocol specification for tool annotations and structured results.</li>
+</ul>
+<p class="small">Documentation was accessed in the conversations that produced the two editions. Exact deployment versions and client availability must be qualified during implementation. Requirements and priorities are the report's engineering proposals based on the user's stated direction, not claims made by the referenced projects.</p>
+
+<h2><span class="n">32</span>Interface examples</h2>
+
+<h4>Connect the existing locally built MCP server</h4>
+<pre><code><span class="c"># Replace the absolute path with the local checkout.</span>
+claude mcp add --transport stdio protosim -- \
+  node /absolute/path/protosim/mcp-server/build/index.js
+
+codex mcp add protosim -- \
+  node /absolute/path/protosim/mcp-server/build/index.js</code></pre>
+<p>These commands register a stdio server; they do not implement the proposed tools. <code>tsc</code> writes <code>build/index.js</code>; it needs <code>npm ci</code> and <code>npm run build</code> in <code>mcp-server/</code> first. <span class="tag n">2.1</span> Without a build, the committed bundle <code>mcp-server/dist/index.js</code> starts with plain <code>node</code> and offers the same three tools; an installed package provides it as <code>protosim-mcp</code> (MC06). Either way the server looks for <code>bin/protosim</code> two directories above itself and then on the PATH. Resolve dependencies in the server environment by capability: Protosim for simulation, build tools for compilation, and avr-gdb for the proposed debugger. Hosted clients need access to that execution environment; a laptop-local path alone is insufficient. [S4, R6, R7]</p>
+<p><span class="tag n">2.1</span> With the server as it is, pass <code>--uart0-out &lt;file&gt;</code> among the flags of <code>run_simulation</code>: it is the only way to get the structured result until PS11 is fixed (MC05).</p>
+
+<h4>A debug session as it ran <span class="tag n">2.1</span></h4>
+<pre><code>$ protosim firmware.elf -m atmega328p -d --uart0-out uart.txt &amp;
+$ avr-gdb --interpreter=mi2 -q -nx firmware.elf
+1-gdb-set mi-async on
+1^done
+2-target-select remote localhost:1234
+*stopped,frame={addr="0x00000000",func="__vectors",args=[],arch="avr:5"},thread-id="1",...
+2^connected
+3-break-insert main
+3^done,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x000000e6",
+     func="main",file="firmware.c",fullname="...",line="17",...}
+4-exec-continue
+4^running
+*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",frame={addr="0x000000e6",
+     func="main",args=[],file="firmware.c",fullname="...",line="17",arch="avr:5"},...
+5-data-evaluate-expression counter
+5^done,value="4660"
+6-break-watch counter
+6^done,wpt={number="2",exp="counter"}
+7-exec-continue
+7^running
+*stopped,reason="watchpoint-trigger",wpt={number="2",exp="counter"},
+     value={old="4660",new="4764"},frame={addr="0x00000130",func="main",...,line="21",...}</code></pre>
+<p class="small">Records shortened where marked and wrapped to fit; the checks that produce them are in <code>documents/checks/</code>.</p>
+
+<h4>Proposed stopped-operation response</h4>
+<pre><code>{
+  "schema_version": "1.0",
+  "request_id": "req-42",
+  "session_id": "session-a",
+  "operation_id": "op-7",
+  "state": "stopped",
+  "state_version": 18,
+  "stop_reason": "breakpoint",
+  "build_id": "build-07",
+  "profile_id": "stock-atmega328p-v1",
+  "location": {
+    "repository": "protoduino",
+    "file": "src/sys/process.c",
+    "function": "process_destroy",
+    "line": 430
+  },
+  "child": {"exit_code": null, "signal": null},
+  "simulator_model": {"flash": "strict"},
+  "test_verdict": "not_evaluated"
+}</code></pre>
+<p class="small">Illustrative identifiers and stop event, not an executed debug session. Implementation should also report ELF/profile hashes, current instruction address with address-space/unit tags, simulated cycles when available, and an evidence reference. <span class="tag n">2.1</span> The <code>child</code> and <code>simulator_model</code> fields are additions of this edition (09, 21).</p>
+
+<h4>Proposed acceptance command</h4>
+<pre><code>protosim --doctor --project /workspace/application \
+  --profile stock-atmega328p-v1 --require build,debug,mcp --json</code></pre>
+<p>Implement this diagnostic command early. It gives both developers and coding agents a shared, inspectable account of the environment before any attempt to explain firmware behaviour.</p>

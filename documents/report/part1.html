@@ -1,0 +1,254 @@
+<section class="cover">
+  <div class="top">
+    <div class="kicker">Functional + technical decision report</div>
+    <h1>Protosim + Protoduino</h1>
+    <p class="sub">An AI toolbox grounded in executable evidence: persistent GDB debugging, model-independent MCP tools, source-aware inspection, configurable AVR profiles, environment diagnosis, reproducible development and migration.</p>
+  </div>
+  <div class="meta"><span>Version 2.1 &middot; 12 November 2026 &middot; reviewed edition</span><span>Prepared for Johannes Klarenbeek and the development team</span></div>
+
+  <div class="keyfacts">
+    <div><div class="v">16 of 25</div><div class="l">findings of edition 2.0 re-run here; all 16 hold, six of them worse than stated</div></div>
+    <div><div class="v">GDB works</div><div class="l">avr-gdb 15 against <code>protosim -d</code>: break, step, inspect, watch, interrupt</div></div>
+    <div><div class="v">3</div><div class="l">statements of edition 2.0 corrected, none of them a design decision</div></div>
+    <div><div class="v">32</div><div class="l">findings added, most from building a bootloader and module loader on Protoduino</div></div>
+  </div>
+
+  <div class="box accent">
+    <h4>What this edition is</h4>
+    <ul>
+      <li>Edition 2.0 was written from source reading and seven host checks; no AVR compiler, simulator run or avr-gdb was available to it. This edition re-checks it with avr-gcc 7.3.0, Protosim built at the pinned revision, its pinned simavr, avr-gdb 15.0.50 and the MCP server driven over stdio.</li>
+      <li>The design of edition 2.0 stands. Its decisions, requirements and gates are kept; where a statement was wrong or a caveat was missing, the text is changed in place and marked <span class="tag n">2.1</span>.</li>
+      <li>It adds what a parallel piece of work found: a streaming ELF bootloader and run-time module loader for Protoduino, built and run in simulation (<code>protoduino/docs/elf-loader-design.pdf</code>). That work exercised Protosim, simavr and Protoduino harder than any example does.</li>
+      <li>Still a design specification, not a release certification. Nothing ran on hardware; PlatformIO was not available, so <code>compile_firmware</code> was read, not run. No repository source file was changed.</li>
+    </ul>
+  </div>
+
+  <div class="legend">
+    <div><span class="tag m">executed</span> run for this edition on the simulated AVR, with avr-gdb or through MCP &nbsp; <span class="tag b">isolated</span> host check of edition 2.0 &nbsp; <span class="tag r">source</span> code path read at the pinned revision &nbsp; <span class="tag p">proposed</span> requirement or recommendation &nbsp; <span class="tag n">2.1</span> new or changed in this edition</div>
+  </div>
+
+  <h3 style="margin-top:12pt">Contents</h3>
+  <ol class="toc">
+    <li><span class="n">00</span>Review of edition 2.0</li>
+    <li><span class="n">01</span>Summary, scope, capabilities, requirements, workflows, architecture (to 06)</li>
+    <li><span class="n">07</span>GDB, sessions, MCP contract, inspection (to 10)</li>
+    <li><span class="n">11</span>Doctor (to 12)</li>
+    <li><span class="n">13</span>Profiles, memory, migration, terminal UI (to 16)</li>
+    <li><span class="n">17</span>Native modules</li>
+    <li><span class="n">18</span>Verification, hardware, roadmap, decisions (to 21)</li>
+    <li><span class="n">22</span>Findings (to 28)</li>
+    <li><span class="n">29</span>Checks executed</li>
+    <li><span class="n">30</span>Sources, references, examples (to 32)</li>
+  </ol>
+</section>
+
+<h2><span class="n">00</span>Review of edition 2.0 <span class="tag n">2.1</span></h2>
+
+<p>Edition 2.0 proposes a host-side controller that gives a coding agent a persistent, source-aware debugger for a simulated AVR, and it lists 25 defects it found on the way by reading. The question for this review was whether that holds up when the code is run.</p>
+
+<h3><span class="n">00.1</span>Verdict</h3>
+<ul>
+  <li><strong>The architecture is right, and its foundation works.</strong> avr-gdb 15.0.50 connected to <code>protosim -d</code> at the pinned revision and did everything the design needs: a source breakpoint in <code>main</code>, stepping by line and by instruction, a RAM variable and a flash constant evaluated by name, a stack frame with file and line, a data watchpoint that reported old and new value, and an interrupt of a running target. It did the same on the ATmega2560. Edition 2.0 could only assume this.</li>
+  <li><strong>The findings are accurate.</strong> Of the 25, 16 were re-run here and every one behaved as described; six more were re-read against the source and stand (PS03, PS06, PD03, PD04, PD07, PD10); three were not re-checked (PS04, PD05, PD06) and nothing contradicts them. Six turned out worse than stated (00.3).</li>
+  <li><strong>The most important omission is how a run ends.</strong> On Linux, and by the same code path on macOS, a run that stops on <code>--max-steps</code> with the default UART bridge is killed by SIGINT from inside Protosim. The existing MCP tool makes <code>max_steps</code> mandatory, so its normal result is the error path: unparsed text, no failure flag. An agent using the tool as documented never sees a structured result. This belongs at the top of gate G0 (PS11, MC05).</li>
+  <li><strong>The runtime-module part is overtaken.</strong> Edition 2.0 treats a loader as future work with a staged plan. A bootloader and module loader now exist as running code in simulation. They implement stage L1 of that plan, without a package format, and add things the plan did not ask for: cooperative loading, and a module refused before the first flash write (17).</li>
+</ul>
+
+<h3><span class="n">00.2</span>Corrections to edition 2.0</h3>
+<table>
+  <thead><tr><th style="width:5%">#</th><th style="width:30%">Edition 2.0 said</th><th>What is the case</th><th style="width:9%">Where</th></tr></thead>
+  <tbody>
+    <tr><td>C1</td><td>PS01: a CPU crash &ldquo;can exit successfully&rdquo;, exit status 0 in both branches.</td><td>True for a headless run (<code>--uart0-out</code>). With the default UART bridge the same run, like every other ending, is killed by SIGINT: status 130 in a shell, a signal and no code in Node. &ldquo;Map faults to nonzero exits&rdquo; is not enough; the shutdown path itself has to be fixed first. <span class="tag m">executed</span></td><td>22, PS01, PS11</td></tr>
+    <tr><td>C2</td><td>09 and 32: connect the &ldquo;existing locally built MCP server&rdquo; at <code>mcp-server/build/index.js</code>; the current tools stay available.</td><td>The path is right for a <code>tsc</code> build. But the repository also carries two committed builds, <code>mcp-server/dist/index.js</code> (a 716 KB bundle) and <code>mcp-server/src/index.js</code>, and the package installs the bundle as <code>/usr/lib/protosim/mcp/index.js</code>. Which server a user runs depends on how Protosim was installed, and the committed ones can lag behind <code>index.ts</code>. <span class="tag m">executed</span> <span class="tag r">source</span></td><td>03, 32, MC06</td></tr>
+    <tr><td>C3</td><td>07: use <code>-exec-interrupt</code> &ldquo;when supported in the selected MI mode&rdquo;.</td><td>Made concrete: in the default mode avr-gdb gave no answer to <code>-exec-interrupt</code> while the target ran. After <code>-gdb-set mi-async on</code>, issued before connecting, it answered and the target stopped. The controller should set it always and keep SIGINT to gdb as the fallback, which also worked. <span class="tag m">executed</span></td><td>07</td></tr>
+  </tbody>
+</table>
+<p>Nothing else in edition 2.0 was found to be wrong. Its arithmetic (65,024 bytes of usable SRAM in a 64 KiB data space), its MI command names, its description of the batch options and of the three existing MCP tools, and the pinned revisions all check out.</p>
+
+<h3><span class="n">00.3</span>Findings that are worse than stated</h3>
+<table class="tight">
+  <thead><tr><th style="width:8%">ID</th><th>Edition 2.0</th><th>Observed</th></tr></thead>
+  <tbody>
+    <tr><td class="id">PS02</td><td>A paused GDB poll is counted as a step and instruments unexecuted code.</td><td>It also spends the step budget. With <code>--max-steps 700</code> and the CPU stopped at a breakpoint, Protosim announced &ldquo;MAX-STEPS reached&rdquo; and exited after 18.3 s in which no instruction ran. A debug session with a step limit ends itself while the developer reads.</td></tr>
+    <tr><td class="id">PS07</td><td>The listener is not restricted to loopback; a failed start still prints &ldquo;listening&rdquo;.</td><td>Both confirmed: the debug port accepted a connection on the machine's non-loopback address, and a second instance on the same port printed &ldquo;GDB server listening on port 1234&rdquo; although its bind had failed.</td></tr>
+    <tr><td class="id">PS09</td><td>The boot HEX parser accepts a record with a bad checksum.</td><td>It also accepts data after the end-of-file record, a line shorter than its length byte says (it reads on into the line end), and non-hex characters. All four return 0.</td></tr>
+    <tr><td class="id">MC02</td><td>Two regular expressions do not match current output.</td><td>End to end through MCP: a run that hit its breakpoint returned <code>"breakpoints_hit":{}</code> and <code>"hot_path":null</code>. Only the coverage total was parsed.</td></tr>
+    <tr><td class="id">PD01</td><td><code>process_destroy()</code> leaves cleanup unscheduled.</td><td>It is not only <code>process_destroy()</code>. A process that simply ends is never finalized either: after 2.5 s its <code>PT_FINALLY</code> block had not run and its state was still EXITING.</td></tr>
+    <tr><td class="id">PD09</td><td>A process struct above 255 bytes has no size assertion.</td><td>The compiler says &ldquo;large integer implicitly truncated&rdquo; and builds. A process struct of 316 bytes gets a descriptor that says 60.</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="n">00.4</span>What edition 2.0 did not have</h3>
+<ul>
+  <li><strong>How Protosim terminates</strong> (PS11), that it has no <code>--help</code> or <code>--version</code> (PS12), and seven more defects around bootloaders, HEX loading, UART injection and reset (PS13 to PS19). Sections 22 and 23.</li>
+  <li><strong>What simavr does differently from a chip</strong> (AV02 to AV09). Edition 2.0 warns that writing simulator memory directly is not a loader test. It does not say that simavr also accepts SPM from anywhere, needs no erase, has no read-while-write state and programs a page in no time, so a loader that goes through the real self-programming path can still pass in simulation and fail on a chip. Section 25.</li>
+  <li><strong>Scheduler and serial-path defects in Protoduino</strong> beyond PD01 to PD04: polls starve events, <code>CC_EXTERN</code> defines variables, the serial buffers are 16 bytes on every part, the serial process strands output, and more (PD11 to PD22). Section 28.</li>
+  <li><strong>A blocker for its own primary target.</strong> <code>sys/clock.h</code> stops with <code>#error</code> for the ATmega2560, so nothing that uses a timer builds for the stock Mega profile the plan starts with (PD17).</li>
+  <li><strong>The existing agent integration.</strong> The repository ships <code>SKILL.md</code>, instructions for language models on using the CLI, and its tests are two PowerShell scripts. Both have to move with the tools (03).</li>
+  <li><strong>Debug information in practice.</strong> Source-aware inspection needs an ELF built for it. The Arduino tool chain builds with link-time optimisation by default and the pinned compiler is avr-gcc 7.3; what DWARF such a build carries has to be measured before decoders rely on it (10).</li>
+</ul>
+
+<h3><span class="n">00.5</span>How this aligns with the ELF loader work</h3>
+<table>
+  <thead><tr><th style="width:24%">Edition 2.0 asks for</th><th>The loader work has</th><th style="width:25%">Difference to settle</th></tr></thead>
+  <tbody>
+    <tr><td>L0: whole firmware through the normal load path</td><td>A bootloader that takes the unmodified <code>.elf</code> over XMODEM-CRC, refuses a wrong file before erasing, and commits with an image record. 13 scenarios pass in simavr.</td><td>Protosim cannot drive it yet: no binary input (PS15), a reset does not return to the loader (PS18), the STK500 thread always starts (PS19).</td></tr>
+    <tr><td>L1: host-linked package for a reserved flash slot, with ABI metadata, validated and written by the device</td><td>Exactly this, with the ELF file as the package: a module is linked for a slot against one kernel build and starts with a descriptor. 9 scenarios pass, on Protoduino's unmodified scheduler, also on Optiboot.</td><td>Edition 2.0 lists initialised data and zero-fill; the loader forbids static data in a module instead, at link time. No whole-module checksum is stored after programming.</td></tr>
+    <tr><td>L2: bounded on-device relocation of <code>ET_REL</code> objects</td><td>Deliberately not done. A fix-up stream is proposed that needs no relocator on the device.</td><td>Decide whether L2 is still wanted.</td></tr>
+    <tr><td>L3: lifecycle, replacement, stale references</td><td>Start, module table, restart after reset, a second module beside a running one. Removal is half built.</td><td>PD04 (stale event pointers) and PD01 apply directly to unload.</td></tr>
+    <tr><td>Register module symbols with GDB after loading</td><td>Not done, and simple: a module is an <code>ET_EXEC</code> file at absolute addresses, so <code>add-symbol-file module.elf</code> needs no section arguments.</td><td>A controller task (10).</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="n">00.6</span>Ideas from this report to take into Protoduino</h3>
+<ul>
+  <li><strong>Host decoders for the scheduler</strong> (F09, section 10). Finding why the loader's &ldquo;module started&rdquo; event disappeared took RAM dumps read by hand; a process-list and event-queue view at a stop would have shown a full queue at once.</li>
+  <li><strong>Generation-checked process handles or purging events on teardown</strong> (PD04). Module unload reuses the RAM block of a slot, which is the exact case PD04 describes.</li>
+  <li><strong>A compile-time assertion on the size of a process struct</strong> (PD09), extended to the RAM a module slot provides.</li>
+  <li><strong>Honest outcomes</strong> (F08). The loader already separates &ldquo;loaded&rdquo;, &ldquo;nobody sent&rdquo; and &ldquo;refused, with a code&rdquo;; the kernel side should report through the same vocabulary of stop reasons this report defines.</li>
+  <li><strong>The evidence bundle</strong> (F13) for the loader's 22 scenarios, in place of the ad hoc result files it has now.</li>
+  <li><strong>A removal-safe poll sweep</strong> (PD02) before modules can be unloaded while others are polled.</li>
+</ul>
+<p>In the other direction, the loader work gives this toolbox three requirements it lacked: binary-safe file transfer to the simulated UART with a real protocol (F15), comparison of simulated flash against an independent reading of the ELF as a pass criterion (18), and a measurement of scheduler fairness, the turns a heartbeat process gets while something else runs, as a runtime metric (18).</p>
+
+<h2><span class="n">01</span>Decision summary</h2>
+
+<p>The proposed toolbox lets a coding agent inspect the development environment, build firmware, operate a persistent simulated AVR, connect execution to source, and demonstrate that a change satisfies explicit requirements. Protosim remains an independently useful simulator and CLI. Protoduino remains the embedded runtime and application framework. A shared host-side controller adds GDB and MCP access without coupling either project to a particular language model.</p>
+
+<table>
+  <thead><tr><th style="width:24%">Decision</th><th>Recommended direction</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Preserve the foundations</strong></td><td>Retain the CLI, batch runs, UART bridges, profiling and coverage. Correct misleading outcomes and instrumentation before relying on them for agent decisions. <span class="tag n">2.1</span> Start with how a run terminates (PS11): until that is fixed no outcome can be trusted.</td></tr>
+    <tr><td><strong>Use GDB as the foundation</strong></td><td>Use avr-gdb through GDB/MI for source-level debugging; use simavr's remote stub for machine access. Add a narrow simulator channel for cycles, scheduled inputs and profiling. <span class="tag n">2.1</span> The pairing was run and works (07).</td></tr>
+    <tr><td><strong>Make MCP the first integration</strong></td><td>Extend the existing MCP server with persistent sessions. Claude Code, Codex and other compatible clients supply the AI and repository editing.</td></tr>
+    <tr><td><strong>Keep inspection outside firmware</strong></td><td>Read symbols, types and memory on the host. Protoduino-aware decoding does not require a firmware debug agent.</td></tr>
+    <tr><td><strong>Make setup inspectable</strong></td><td>Add <code>protosim --doctor</code>, a <code>doctor</code> alias, JSON output and an equivalent MCP tool. Report capabilities and failures with evidence.</td></tr>
+    <tr><td><strong>Separate real and virtual targets</strong></td><td>Start with stock devices, then qualify expanded memory profiles. Treat 1 MiB flash as an experimental engineering target, not an already validated maximum.</td></tr>
+    <tr><td><strong>Treat the simulator as a model</strong> <span class="tag n">2.1</span></td><td>Record, per result, which behaviour of a real chip simavr does not model (25). A flash-programming result from simulation is evidence of logic and addressing, not of flash discipline or timing.</td></tr>
+  </tbody>
+</table>
+
+<p><strong>What makes the combination distinctive.</strong> The strongest product opportunity is a complete evidence chain: environment, source revision, build, machine state, observable behaviour, resource budget, regression result. The same tools should support a human debugger, an AI coding agent, automated CI, and measured migration to smaller AVR targets. This is an intended differentiator; no market-wide uniqueness study or comparative benchmark was performed.</p>
+
+<div class="box">
+<h4>Recommended first demonstration</h4>
+<p>A coding agent diagnoses its tools, builds an unmodified Protoduino example, starts a persistent GDB session, reproduces a scheduler or terminal defect, inspects its cause, applies a source fix, and reruns a saved regression. <span class="tag n">2.1</span> Two defects are now ready-made for it, each with a probe that fails today and a one-line fix: a process that ends is never finalized (PD01), and a process that polls itself stops all events (PD14). Both are reproduced by <code>protoduino/docs/elfloader/prototype/probes/run_probes.sh</code>. Expanded memory can follow without blocking this demonstration; run-time module loading no longer needs to wait for it, because it exists (17).</p>
+</div>
+
+<h2><span class="n">02</span>Scope, evidence and source revisions</h2>
+
+<p>The second edition incorporated the agreed GDB foundation, direct MCP use, provider independence and the environment doctor, and replaced the earlier Haiku-centred architecture with a reusable controller. All API names, CLI options and schemas described as proposed are requirements for future implementation, not claims that they exist today.</p>
+
+<table class="tight">
+  <thead><tr><th style="width:36%">Reviewed repository</th><th>Pinned revision</th></tr></thead>
+  <tbody>
+    <tr><td>Protosim</td><td><code>6fadc6fcafd5bb14096436a3e1c87fef4a28cb05</code></td></tr>
+    <tr><td>Protoduino standalone</td><td><code>a3dbbf324703ebc1d26bd9d811deee56439964fc</code></td></tr>
+    <tr><td>simavr used by Protosim</td><td><code>a6fc4cc754ebf4ffb1e615ba7c2ab8a6d6f8b967</code></td></tr>
+    <tr><td>Protoduino submodule in Protosim</td><td><code>78d05ac0f5e8a448776e48b4bf3839b031ce13c0</code>; not audited, and not initialised in a fresh checkout</td></tr>
+    <tr><td>ELF loader work <span class="tag n">2.1</span></td><td>Protoduino branch <code>ccr-8617b1c3-gjnqlx</code>, commit <code>8fdccda</code>: <code>docs/elf-loader-design.pdf</code>, <code>docs/elfloader/</code></td></tr>
+  </tbody>
+</table>
+
+<p><strong>Evidence vocabulary.</strong> <em>Executed</em> <span class="tag n">2.1</span>: run for this edition, on the simulated AVR with the unmodified sources, with avr-gdb against <code>protosim -d</code>, or through the MCP server over stdio. <em>Isolated reproduction</em>: a small host test of edition 2.0 that executed the actual parser or extracted functions with controlled fixtures. <em>Source-confirmed</em>: the relevant code path was read at the listed revision; this is not an end-to-end reproduction. <em>Risk / limitation</em>: a conditional failure or supported-design boundary. <em>Proposed</em>: a new feature, contract or engineering recommendation.</p>
+
+<p><strong>Tools of this edition.</strong> avr-gcc 7.3.0 with avr-libc, GNU gdb 15.0.50 built for AVR (Ubuntu package <code>gdb-avr</code>), Node 22, Protosim and simavr built from the pinned revisions on Linux. Not available: PlatformIO, the Arduino core, any hardware. No expanded-memory firmware and no model benchmark was exercised.</p>
+
+<p class="small">Units: KiB = 1,024 bytes; MiB = 1,048,576 bytes. The discussion's &ldquo;2650&rdquo; means ATmega2560. &ldquo;ATTiny8&rdquo; is an illustrative small target, not an exact device selection; the loader work takes the ATtiny25/45/85 family. Source keys [S1]&ndash;[S12] and [R1]&ndash;[R10] are listed in sections 30 and 31.</p>
+
+<h2><span class="n">03</span>Current capabilities</h2>
+
+<table>
+  <thead><tr><th style="width:15%">Area</th><th style="width:40%">Observed implementation</th><th>Additional work</th></tr></thead>
+  <tbody>
+    <tr><td>Simulator</td><td>ELF/HEX loading; <code>-m</code> MCU and <code>-f</code> frequency; simavr execution; <code>-d</code> starts a GDB listener on port 1234. <span class="tag n">2.1</span> No <code>--help</code>, no <code>--version</code>: an unknown first argument is taken as the firmware file.</td><td>Validate configuration conflicts, image bounds and startup failures; add stable session identity. <span class="tag n">2.1</span> Fix termination (PS11); add version and help.</td></tr>
+    <tr><td>Debugger <span class="tag n">2.1</span></td><td>avr-gdb 15.0.50 connects and can break, step, inspect, watch and interrupt on ATmega328P and ATmega2560. <span class="tag m">executed</span></td><td>The defects of 22 and 25; a free port; loopback only.</td></tr>
+    <tr><td>Batch diagnosis</td><td><code>-b</code> logs breakpoint hits; <code>-w</code> prints watched memory; register/SRAM dumps and tracing.</td><td>Keep these semantics; add interactive stopping and typed inspection through GDB.</td></tr>
+    <tr><td>Measurements</td><td>Coverage, flat profile and CALL/RET-derived call graph.</td><td>Fix flash range, paused-state accounting and interrupt attribution before making exactness claims.</td></tr>
+    <tr><td>UART and tests</td><td>PTY/TCP bridges and headless text input/output; output-match termination. <span class="tag n">2.1</span> Input is a C string delivered one byte per millisecond whatever the baud rate (PS15).</td><td>Binary-safe I/O, deterministic scheduling, responsive capture and replay contracts.</td></tr>
+    <tr><td>Bootloaders <span class="tag n">2.1</span></td><td><code>--bootloader</code> loads a HEX or ELF bootloader and always starts an STK500 uploader thread.</td><td>PS08, PS13, PS18, PS19; a switch for the uploader; another protocol.</td></tr>
+    <tr><td>MCP</td><td><code>init_arduino_project</code>, <code>compile_firmware</code> and <code>run_simulation</code>; stdio transport. <span class="tag n">2.1</span> Three compiled copies of the server exist (MC06).</td><td>Long-lived debugger processes, structured outcomes, doctor and bounded async operations.</td></tr>
+    <tr><td>Agent instructions and tests <span class="tag n">2.1</span></td><td><code>SKILL.md</code> tells a model how to use the CLI; its first rule is &ldquo;always use <code>--max-steps</code>&rdquo;. <code>tests/</code> holds two PowerShell scripts.</td><td>Keep <code>SKILL.md</code> in step with the tools; tests that run on Linux and in CI.</td></tr>
+    <tr><td>Protoduino</td><td>Cooperative processes/protothreads, event queue, optional inboxes, IPC pools/pipes, terminal and layout/render code.</td><td>Host decoders; fixes to cleanup and repaint cases; explicit feature fixtures. <span class="tag n">2.1</span> The findings of 26 to 28.</td></tr>
+    <tr><td>Module loading</td><td>A compilation/packaging guide describes intended modules. <span class="tag n">2.1</span> A working bootloader and module loader exist beside the library, in simulation (17).</td><td><span class="tag n">2.1</span> Move it into the library; hardware; the lifecycle of L3.</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Important interpretation.</strong> Current Protosim <code>-b</code> is a logging observation point, and <code>-s</code> is an instruction trace option; neither is an interactive GDB prompt. Current <code>-w</code> reads configured SRAM addresses at observation points rather than stopping on a write. Preserve these useful batch tools and name new debugger tools precisely. [S1, S2]</p>
+<p>The MCP implementation launches a fresh simulator process for each run and waits for process output. Adding <code>-d</code> to that existing one-shot call does not create a usable interactive MCP debugger: the server must separately manage Protosim, GDB, asynchronous stop events and session state. [S4]</p>
+<p>The TUI already has element layout, appearance signatures and a command queue. The intended direction is retained vnode/element state with incremental terminal updates; a full AVR screen-cell buffer is not a prerequisite. The inspected roadmap also discusses optional alternatives, which should remain separate design choices. [S9]</p>
+
+<h2><span class="n">04</span>Functional requirements</h2>
+
+<p class="small">P0: first dependable release. P1: next capability layer. P2: advanced or experimental. &ldquo;Pass&rdquo; always refers to a declared scenario and target, not universal correctness.</p>
+
+<table>
+  <thead><tr><th style="width:9%">ID</th><th style="width:36%">Requirement</th><th>Acceptance evidence</th></tr></thead>
+  <tbody>
+    <tr><td class="id">F01 / P0</td><td>Doctor works without a firmware argument.</td><td>Readable stdout and valid JSON describe the resolved environment, checks and remediation.</td></tr>
+    <tr><td class="id">F02 / P0</td><td>Preserve existing independent CLI and batch use.</td><td>Existing examples run; intentional fixes to error behaviour are documented.</td></tr>
+    <tr><td class="id">F03 / P0</td><td>Provide persistent source-level debugging.</td><td>Start, break, inspect, step and resume preserve one session and matching ELF.</td></tr>
+    <tr><td class="id">F04 / P0</td><td>Work directly from MCP clients.</td><td>One scripted scenario passes through both supported Claude Code and Codex configurations.</td></tr>
+    <tr><td class="id">F05 / P0</td><td>Link evidence to source and build identity.</td><td>Every stop identifies ELF hash, source revision/patch, profile and source location when known.</td></tr>
+    <tr><td class="id">F06 / P0</td><td>Bound execution and handle cancellation.</td><td>Unreachable breakpoint, hung firmware and lost debugger return explicit outcomes without wedging MCP.</td></tr>
+    <tr><td class="id">F07 / P0</td><td>Exercise and observe UART.</td><td>Binary payloads and fragmented input produce traceable byte output and no silent capture truncation.</td></tr>
+    <tr><td class="id">F08 / P0</td><td>Report failures honestly.</td><td>Crash, timeout, missing tool, unsupported feature and failed assertion remain distinguishable. <span class="tag n">2.1</span> So does a normal end: a process killed by its own shutdown is not one.</td></tr>
+    <tr><td class="id">F09 / P1</td><td>Decode Protoduino runtime structures on the host.</td><td>Processes, event queue, optional inboxes, IPC pipes and vnode state match raw memory. <span class="tag n">2.1</span> And the module table and slots.</td></tr>
+    <tr><td class="id">F10 / P1</td><td>Share target profiles across build and simulation.</td><td>Compiler, linker, startup, simulator and measurements agree on memory/clock/peripherals. <span class="tag n">2.1</span> And on the boot section: its size, start and the reset vector that the fuses select.</td></tr>
+    <tr><td class="id">F11 / P1</td><td>Migrate a component across targets.</td><td>Separate builds meet the same behaviour contract and target-specific resource/deadline limits.</td></tr>
+    <tr><td class="id">F12 / P1</td><td>Test the terminal as observable output.</td><td>A host terminal model verifies text, cursor, style and region changes from UART bytes.</td></tr>
+    <tr><td class="id">F13 / P1</td><td>Return a reproducible evidence bundle.</td><td>Another developer can rebuild and replay a declared scenario from recorded inputs and versions.</td></tr>
+    <tr><td class="id">F14 / P1, P2</td><td>Support runtime native modules and expanded flash.</td><td><span class="tag n">2.1</span> Split. Modules (P1): the loader's scenarios pass through Protosim and MCP, not only its own harness. Expanded flash (P2): the high-address suite passes before the capability is advertised.</td></tr>
+    <tr><td class="id">F15 / P1 <span class="tag n">2.1</span></td><td>Transfer a file to the simulated target with a real protocol, and reset into a bootloader.</td><td>An <code>.elf</code> sent with XMODEM-CRC arrives byte for byte; a reset during the run re-enters the bootloader; flash afterwards equals an independent load of the same file.</td></tr>
+  </tbody>
+</table>
+
+<h2><span class="n">05</span>User workflows</h2>
+
+<p><strong>A. First use on a development machine.</strong> The agent calls doctor before building. It learns which executable paths are selected, whether AVR tools and PlatformIO are available, which source revisions are active, and which profiles are supported. A missing compiler produces a targeted installation/configuration suggestion; a missing optional provider key does not block local MCP debugging. The agent builds a small fixture and performs a bounded GDB handshake smoke check.</p>
+<p><strong>B. Explain and fix a stalled process.</strong> The agent starts the failing build, replays its input, pauses at a dispatch or termination point, and inspects the scheduler list and event queue using GDB plus the matching source. It distinguishes a process waiting for input from one unable to reach its cleanup state. The resulting patch includes a regression that fails before the change and passes afterward. Reading a process object never requires adding a debug process to Protoduino. <span class="tag n">2.1</span> A third case belongs here: a process that is ready but starved, because another one keeps a poll pending (PD14). The decoder has to show the poll flags and the queue, not only the list.</p>
+<p><strong>C. Develop generously, then reduce the target.</strong> A controller component passes first on a generous virtual Mega2560 profile. The agent rebuilds for a smaller exact MCU, adapts I/O bindings, measures flash and runtime headroom, and reruns the same externally observable behaviour tests. The terminal UI can remain on a larger target when it is outside the controller component's required contract. The system reports infeasibility rather than silently dropping required behaviour.</p>
+<p><strong>D. Investigate a terminal rendering defect.</strong> The agent captures UART output and the reconstructed terminal screen, inspects dirty flags and the retained element tree, and reproduces text replacement, shrinking content or node removal. It compares the intended region against the actual terminal state and fixes invalidation or transport behaviour. The host may keep a full terminal buffer; AVR firmware need only retain its tree and update metadata.</p>
+<p><strong>E. Develop a loader across repositories.</strong> Protoduino exports a documented module ABI; an application repository contains a small module fixture; host tools link it. The agent verifies transmission, flash placement, initialisation, entry, stop and unload. It binds symbols to loaded addresses for debugging and rejects incompatible modules with a reason. A simulator memory write that bypasses the firmware loader is a diagnostic experiment, not a passing loader test. <span class="tag n">2.1</span> The first four of those steps now pass in simulation (17); stop and unload do not exist yet, and the symbol binding is a controller task.</p>
+<p><strong>F. Flash and load over the serial line.</strong> <span class="tag n">2.1</span> The agent builds a kernel and a module, resets the simulated board into its bootloader, sends the kernel's <code>.elf</code> with XMODEM, waits for the kernel to ask for a module, sends that, and checks three things: flash equals an independent load of both files, the module's process shows up in the decoded process list, and the other processes kept their turns while it loaded.</p>
+
+<div class="box">
+<h4>Definition of a completed task</h4>
+<p>A reviewable patch, a matching build manifest, preserved acceptance criteria, passing scenario results, measured resource use and explicit remaining limitations. A successful compilation or an enthusiastic model response is not sufficient.</p>
+</div>
+
+<h2><span class="n">06</span>Architecture</h2>
+
+<figure>
+<svg viewBox="0 0 700 190" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="9.5">
+  <defs><marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#5b6672"/></marker></defs>
+  <rect x="0" y="4" width="330" height="36" rx="3" fill="#f3f5f7" stroke="#cfd6dd"/><text x="165" y="20" text-anchor="middle" font-weight="600">Coding agents</text><text x="165" y="33" text-anchor="middle" fill="#5b6672">Claude Code / Codex / other MCP clients</text>
+  <rect x="370" y="4" width="330" height="36" rx="3" fill="#f3f5f7" stroke="#cfd6dd" stroke-dasharray="4 3"/><text x="535" y="20" text-anchor="middle" font-weight="600">Optional standalone UI</text><text x="535" y="33" text-anchor="middle" fill="#5b6672">provider adapter / OpenRouter / local model</text>
+  <rect x="130" y="62" width="440" height="40" rx="4" fill="#e3f0f5" stroke="#0b5c7a" stroke-width="1.3"/><text x="350" y="79" text-anchor="middle" font-weight="700" font-size="11" fill="#0b5c7a">Shared session controller</text><text x="350" y="93" text-anchor="middle" fill="#10323f">MCP tools / build identity / operations / evidence</text>
+  <rect x="0" y="130" width="210" height="46" rx="3" fill="#fff" stroke="#8a94a0"/><text x="105" y="148" text-anchor="middle" font-weight="600">avr-gdb / MI</text><text x="105" y="162" text-anchor="middle" fill="#5b6672">symbols and source debugging</text>
+  <rect x="245" y="130" width="210" height="46" rx="3" fill="#fff" stroke="#8a94a0"/><text x="350" y="148" text-anchor="middle" font-weight="600">Protosim + simavr</text><text x="350" y="162" text-anchor="middle" fill="#5b6672">AVR / UART / cycles / profiles</text>
+  <rect x="490" y="130" width="210" height="46" rx="3" fill="#fff" stroke="#8a94a0"/><text x="595" y="148" text-anchor="middle" font-weight="600">Build workspace</text><text x="595" y="162" text-anchor="middle" fill="#5b6672">Protoduino + application + ELF</text>
+  <line x1="165" y1="40" x2="300" y2="59" stroke="#5b6672" marker-end="url(#pa)"/><text x="186" y="56" fill="#5b6672">MCP</text>
+  <line x1="535" y1="40" x2="400" y2="59" stroke="#5b6672" stroke-dasharray="4 3" marker-end="url(#pa)"/>
+  <line x1="240" y1="102" x2="120" y2="127" stroke="#5b6672" marker-end="url(#pa)"/><text x="132" y="118" fill="#5b6672">GDB/MI</text>
+  <line x1="350" y1="102" x2="350" y2="127" stroke="#5b6672" marker-end="url(#pa)"/><text x="356" y="118" fill="#5b6672">side channel</text>
+  <line x1="460" y1="102" x2="580" y2="127" stroke="#5b6672" marker-end="url(#pa)"/>
+  <line x1="210" y1="153" x2="242" y2="153" stroke="#5b6672" marker-end="url(#pa)"/><text x="226" y="147" text-anchor="middle" fill="#5b6672">RSP</text>
+</svg>
+<figcaption><strong>Figure 1.</strong> One controller, several entry points. Three different protocols: MCP from agent to tools, GDB/MI from controller to debugger, the GDB remote serial protocol from debugger to simulator.</figcaption>
+</figure>
+
+<p>Implement a reusable session/controller library behind the existing TypeScript MCP server. It manages child processes, build identities, operation state, output capture and evidence. A future standalone interface may reuse that library or connect through MCP. GDB provides source-level semantics; Protosim provides simulator-specific control and measurements. [S1, S4, R1]</p>
+
+<table class="tight">
+  <thead><tr><th style="width:26%">Owner</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td>Coding agent / optional UI</td><td>Interpret requests, inspect/edit repositories and choose experiments. Model/provider credentials stay here.</td></tr>
+    <tr><td>Session controller</td><td>Validate requests; serialise state-changing operations; associate profile, binary, symbols and source; retain evidence.</td></tr>
+    <tr><td>avr-gdb</td><td>Resolve source locations and types; manage breakpoint/step requests; read machine state through RSP.</td></tr>
+    <tr><td>Protosim / simavr</td><td>Execute the AVR and modelled peripherals; supply cycles, scheduled I/O, profiling and authoritative machine stop reasons.</td></tr>
+    <tr><td>Protoduino / application</td><td>Run the embedded program. Existing types and symbols support external inspection.</td></tr>
+  </tbody>
+</table>
+<p>Use a narrow local control endpoint for capabilities not supplied by ordinary GDB: cycle budgets, deterministic UART delivery, counters and profile snapshots. Proposed transport: a versioned local socket or dedicated pipe, serviced on the simulator thread even while stopped. It must coordinate with GDB execution state rather than create a competing run/step owner. Model API latency is never part of the AVR instruction loop.</p>
+<p><span class="tag n">2.1</span> The side channel is also where file transfer belongs (F15). An XMODEM sender has to react to bytes from the target within the target's time, so it must run inside the simulator on simulated cycles, as the existing STK500 uploader thread does not: that thread works on host time. The harness of the loader work drives its sender from simavr's cycle timer and is a working model for it.</p>
