@@ -156,7 +156,10 @@ static void *uart_pty_thread(void *param) {
             dst++;
           }
           size_t len = dst - buffer;
-          TRACE(size_t r = write(p->port[ti].s, buffer, len);)
+          /* the write itself is not part of the trace: without it nothing
+             the firmware sends reaches the PTY */
+          ssize_t r = write(p->port[ti].s, buffer, len);
+          (void)r;
           TRACE(if (!p->port[ti].tap) hdump("pty send", buffer, r);)
         }
       }

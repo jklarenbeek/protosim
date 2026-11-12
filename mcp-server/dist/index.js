@@ -20891,7 +20891,7 @@ var runSimulationTool = {
       flags: {
         type: "array",
         items: { type: "string" },
-        description: "Additional protosim flags (e.g., ['--coverage', '--profile', '--callgraph', '--dump-regs'])"
+        description: "Additional protosim flags, one array entry per argument (e.g., ['--coverage', '--profile', '--callgraph', '--dump-regs']). Resets: ['--reset-at', '20:pin'] resets the part at 20 ms of simulated time with cause power, pin, brownout or watchdog; ['--reset-cause', 'pin'] sets the cause the first start reports in MCUSR; ['--reset-vector', '0x7800'] sets where a reset leads."
       }
     },
     required: ["elf_path", "max_steps"]

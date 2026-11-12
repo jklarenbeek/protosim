@@ -129,6 +129,39 @@ protosim <firmware.elf|.hex> [options]
 | `--exit-on-uart` | `<string>` | Exit simulator successfully (code 0) the moment this exact string is transmitted over UART. |
 | `--wait-tcp` | — | Halt execution at cycle 0 until a TCP client connects. |
 
+### Reset and reset cause
+
+An AVR records why it was reset in `MCUSR`, and firmware and bootloaders branch on it: a
+bootloader may wait for an upload only after a reset through the pin, an application may
+want to know that the watchdog stopped it. protosim records the cause as a chip does: a
+power-on sets `PORF` and clears the other flags (and RAM); any other reset adds its own
+flag to those that firmware has not cleared. That also holds for a watchdog reset made by
+the simulated watchdog and for `monitor reset` in GDB.
+
+| Flag | Argument | Effect |
+|------|----------|--------|
+| `--reset-cause` | `<cause>` | Cause the first start reports (default: `power`). |
+| `--reset-at` | `<ms>[:cause]` | Reset the part at that simulated time, counted from the start across earlier resets. Repeatable. The cause is `pin` when none is given. |
+| `--reset-vector` | `<addr>` | Where a reset leads, e.g. `0x7800` for a boot section selected by `BOOTRST`. Default: address 0, or the entry of `--bootloader`. Execution also starts there. |
+
+`<cause>` is one of `power`, `pin`, `brownout`, `watchdog`. On Linux and macOS a running
+simulation also takes `kill -USR1 <pid>` as a pull on the reset pin and `kill -USR2 <pid>`
+as a power cycle. Every reset is logged as `[RST] pin reset at 20.000 ms → PC=0x0000 MCUSR=0x02`.
+`--uart0-in` goes on after a reset.
+
+```bash
+make -C examples/reset_cause
+bin/protosim examples/reset_cause/reset_cause.elf --uart0-out out.txt --max-steps 3000000 \
+    --reset-at 20 --reset-at 40:brownout --reset-at 60:power
+cat out.txt
+# start 01: MCUSR=01 power-on
+# start 02: MCUSR=02 pin
+# start 03: MCUSR=04 brown-out
+# start 01: MCUSR=01 power-on        (a power-on clears RAM, so the counter starts again)
+```
+
+`tests/test_reset_cause.sh` checks all of this.
+
 ### Profiling (ELF only — requires symbol table)
 
 | Flag | Argument | Effect |

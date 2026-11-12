@@ -69,6 +69,19 @@ bin/protosim app.elf --uart0-in "hello\n" --uart0-out out.txt --exit-on-uart "SU
 ```
 This is the **preferred approach** for LLMs to build self-verifying test scripts without complex asynchronous Python subprocesses.
 
+### Reset and Reset Cause
+Firmware and bootloaders read `MCUSR` to learn why the part was reset. `protosim` records the cause as a chip does (flags add up until firmware clears them; a power-on clears the others and RAM):
+- `--reset-cause <power|pin|brownout|watchdog>`: Cause the first start reports (default `power`).
+- `--reset-at <ms>[:cause]`: Reset at that simulated time; repeatable; the cause is `pin` when omitted.
+- `--reset-vector <addr>`: Where a reset leads (e.g. `0x7800` for a boot section). With `--bootloader` it is the bootloader entry by default.
+- Linux/macOS: `kill -USR1 <pid>` pulls the reset pin of a running simulation, `kill -USR2 <pid>` cycles the power.
+
+Example: check that firmware tells a pin reset from a watchdog reset:
+```bash
+bin/protosim app.elf --uart0-out out.txt --max-steps 3000000 --reset-at 20:pin --reset-at 40:watchdog
+```
+Each reset appears in the log as `[RST] pin reset at 20.000 ms → PC=0x0000 MCUSR=0x02`.
+
 ## 5. Troubleshooting
 - If step limits are reached before target behavior occurs, **increase `--max-steps`**.
 - If a function shows 0% coverage (`NEVER REACHED`), ensure your step budget is high enough and that proper UART input was provided to trigger those code paths.

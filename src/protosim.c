@@ -33,6 +33,7 @@
 #include "debug.h"
 #include "profiling.h"
 #include "ihex_loader.h"
+#include "reset.h"
 
 /* ═══════════════════════════════════════════════════════════════
    Globals (Definitions)
@@ -44,6 +45,9 @@ int opt_dump_regs = 0;
 int opt_single_step = 0;
 long opt_max_steps = 0;
 long opt_trace_every = 0;
+
+int opt_reset_cause = RESET_POWER_ON; /* what the first start reports */
+long opt_reset_vector = -1;           /* where a reset leads; -1: address 0, or the bootloader */
 
 char *opt_uart0_in = NULL;
 char *opt_uart0_out = NULL;
@@ -84,6 +88,12 @@ static avr_cycle_count_t uart0_in_timer(struct avr_t *avr, avr_cycle_count_t whe
   return when + avr_hz_to_cycles(avr, 1000); // 1ms approx for 9600 baud
 }
 
+/* simavr drops every cycle timer at a reset; the injection goes on after it. */
+static void uart0_in_rearm(struct avr_t *avr) {
+  if (opt_uart0_in)
+    avr_cycle_timer_register(avr, avr_hz_to_cycles(avr, 1000), uart0_in_timer, NULL);
+}
+
 #ifdef _WIN32
 uart_com_t uart_com;
 #else
@@ -115,6 +125,13 @@ int main(int argc, char *argv[]) {
         "  -v                     Verbose simavr output\n"
         "  --bootloader <file>    Load a bootloader .hex (or .elf) into flash\n"
         "                         and start execution at its entry point.\n"
+        "\nReset:\n"
+        "  --reset-cause <cause>  Cause the first start reports in MCUSR (default: power)\n"
+        "  --reset-at <ms>[:cause] Reset at that simulated time; repeatable (default cause: pin)\n"
+        "                         cause: power | pin | brownout | watchdog\n"
+        "  --reset-vector <addr>  Where a reset leads, e.g. 0x7800 for a boot section\n"
+        "                         (default: 0, or the entry of --bootloader)\n"
+        "  SIGUSR1 / SIGUSR2      Pull the reset pin / cycle the power of a running simulation\n"
         "\nLLM Debug tools:\n"
         "  -b <addr|symbol>       Breakpoint at hex addr or ELF symbol\n"
         "  -w <addr:sz:name>      Watch SRAM variable at breakpoints\n"
@@ -182,6 +199,18 @@ int main(int argc, char *argv[]) {
       if (i + 1 < argc) opt_exit_on_uart = argv[++i];
     } else if (!strcmp(argv[i], "--wait-tcp")) {
       opt_wait_tcp = 1;
+    } else if (!strcmp(argv[i], "--reset-cause")) {
+      if (i + 1 < argc && (opt_reset_cause = reset_cause_from_name(argv[++i])) < 0) {
+        fprintf(stderr, "ERROR: --reset-cause %s: use power, pin, brownout or watchdog\n", argv[i]);
+        exit(1);
+      }
+    } else if (!strcmp(argv[i], "--reset-at")) {
+      if (i + 1 < argc && add_reset_arg(argv[++i]) < 0) {
+        fprintf(stderr, "ERROR: --reset-at %s: use <ms> or <ms>:<cause>\n", argv[i]);
+        exit(1);
+      }
+    } else if (!strcmp(argv[i], "--reset-vector")) {
+      if (i + 1 < argc) opt_reset_vector = strtol(argv[++i], NULL, 0);
     }
   }
 
@@ -301,14 +330,32 @@ int main(int argc, char *argv[]) {
       avr_t *tmp = avr_make_mcu_by_name(mmcu);
       avr_init(tmp);
       avr_load_firmware(tmp, &bl_fw);
-      bl_entry = tmp->pc;
+      /* simavr does not set the program counter when it loads a file: the
+         bootloader begins at the lowest address it occupies */
+      while (bl_entry <= tmp->flashend && tmp->flash[bl_entry] == 0xff) bl_entry++;
+      if (bl_entry > tmp->flashend) bl_entry = 0;
       memcpy(avr->flash, tmp->flash, tmp->flashend + 1);
       printf("[BL] Loaded bootloader ELF: %s  entry=0x%04x\n", opt_bootloader, bl_entry);
     }
     avr->pc = bl_entry;
+    avr->reset_pc = bl_entry; /* BOOTRST: a reset enters the bootloader again */
     printf("[BL] Initial PC set to bootloader entry 0x%04x\n", bl_entry);
     if ((bl_entry + bl_size) > avr->codeend) avr->codeend = bl_entry + bl_size;
   }
+
+  /* ── Reset vector and reset cause ────────────────────────── */
+  if (opt_reset_vector >= 0) {
+    if ((uint32_t)opt_reset_vector > avr->flashend) {
+      fprintf(stderr, "ERROR: --reset-vector 0x%lx is outside flash\n", opt_reset_vector);
+      exit(1);
+    }
+    avr->reset_pc = (avr_flashaddr_t)opt_reset_vector;
+    avr->pc = avr->reset_pc;
+    printf("[RST] Reset vector 0x%04x\n", avr->reset_pc);
+  }
+  reset_setup(avr, opt_reset_cause);
+  reset_add_hook(uart0_in_rearm);
+  reset_install_signals();
 
   avr->log = 1 + verbose;
 
@@ -406,7 +453,9 @@ int main(int argc, char *argv[]) {
     }
 
     steps++;
-    
+
+    reset_after_step(avr);
+
     if (force_exit_success) {
       printf("[DBG] SUCCESS: Match '--exit-on-uart %s' found. Exiting correctly.\n", opt_exit_on_uart);
       break;
