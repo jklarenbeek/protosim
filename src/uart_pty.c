@@ -103,7 +103,7 @@ static void uart_pty_xoff_hook(struct avr_irq_t *irq, uint32_t value,
 static void *uart_pty_thread(void *param) {
   uart_pty_t *p = (uart_pty_t *)param;
 
-  while (1) {
+  while (!p->stop) {
     fd_set read_set, write_set;
     int max = 0;
     FD_ZERO(&read_set);
@@ -209,8 +209,11 @@ void uart_pty_init(struct avr_t *avr, uart_pty_t *p) {
 }
 
 void uart_pty_stop(uart_pty_t *p) {
-  puts(__func__);
-  pthread_kill(p->thread, SIGINT);
+  /* The thread looks at the flag every time its select() returns, at the
+     latest after its timeout. It used to be sent SIGINT, which ends the
+     whole process, or nothing at all where SIGINT is ignored, as it is for
+     a background job of a script: then the join below never returned. */
+  p->stop = 1;
   for (int ti = 0; ti < 2; ti++)
     if (p->port[ti].s)
       close(p->port[ti].s);
@@ -218,23 +221,14 @@ void uart_pty_stop(uart_pty_t *p) {
   pthread_join(p->thread, &ret);
 }
 
-void uart_pty_connect(uart_pty_t *p, char uart) {
-  uint32_t f = 0;
-  avr_ioctl(p->avr, AVR_IOCTL_UART_GET_FLAGS(uart), &f);
-  f &= ~AVR_UART_FLAG_STDIO;
-  avr_ioctl(p->avr, AVR_IOCTL_UART_SET_FLAGS(uart), &f);
-
-  avr_irq_t *src =
-      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_OUTPUT);
-  avr_irq_t *dst =
-      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_INPUT);
-  avr_irq_t *xon =
-      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_OUT_XON);
-  avr_irq_t *xoff =
-      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_OUT_XOFF);
-  if (src && dst) {
-    avr_connect_irq(src, p->irq + IRQ_UART_PTY_BYTE_IN);
-    avr_connect_irq(p->irq + IRQ_UART_PTY_BYTE_OUT, dst);
+/* Put the bridge between two byte IRQs of whoever owns the line: `from`
+   delivers what the part sends, `to` takes what it is to receive, and xon
+   and xoff say when it can take a byte. `name` ends the link in /tmp. */
+void uart_pty_connect_irqs(uart_pty_t *p, avr_irq_t *from, avr_irq_t *to,
+                           avr_irq_t *xon, avr_irq_t *xoff, char name) {
+  if (from && to) {
+    avr_connect_irq(from, p->irq + IRQ_UART_PTY_BYTE_IN);
+    avr_connect_irq(p->irq + IRQ_UART_PTY_BYTE_OUT, to);
   }
   if (xon)
     avr_irq_register_notify(xon, uart_pty_xon_hook, p);
@@ -244,7 +238,7 @@ void uart_pty_connect(uart_pty_t *p, char uart) {
   for (int ti = 0; ti < 1 + (p->hastap ? 1 : 0); ti++)
     if (p->port[ti].s) {
       char link[128];
-      snprintf(link, sizeof(link), "/tmp/simavr-uart%c%s", uart,
+      snprintf(link, sizeof(link), "/tmp/simavr-uart%c%s", name,
                ti == 1 ? "-tap" : "");
       unlink(link);
       if (symlink(p->port[ti].slavename, link) != 0) {
@@ -259,6 +253,21 @@ void uart_pty_connect(uart_pty_t *p, char uart) {
                p->port[ti].slavename);
       }
     }
+}
+
+void uart_pty_connect(uart_pty_t *p, char uart) {
+  uint32_t f = 0;
+  avr_ioctl(p->avr, AVR_IOCTL_UART_GET_FLAGS(uart), &f);
+  f &= ~AVR_UART_FLAG_STDIO;
+  avr_ioctl(p->avr, AVR_IOCTL_UART_SET_FLAGS(uart), &f);
+
+  uart_pty_connect_irqs(
+      p,
+      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_OUTPUT),
+      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_INPUT),
+      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_OUT_XON),
+      avr_io_getirq(p->avr, AVR_IOCTL_UART_GETIRQ(uart), UART_IRQ_OUT_XOFF),
+      uart);
 }
 
 int uart_pty_is_connected(uart_pty_t *p) {

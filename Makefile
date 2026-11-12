@@ -3,7 +3,7 @@
 CC = gcc
 CFLAGS = -Wall -O2 -I./include -I./libraries/simavr/simavr/sim -I./libraries/simavr/simavr/sim/avr
 
-COMMON_SRCS = src/stk500_uploader.c src/debug.c src/profiling.c src/ihex_loader.c src/reset.c
+COMMON_SRCS = src/stk500_uploader.c src/debug.c src/profiling.c src/ihex_loader.c src/reset.c src/stimulus.c
 
 ifeq ($(OS),Windows_NT)
     SRCS = src/protosim.c src/uart_com.c $(COMMON_SRCS)

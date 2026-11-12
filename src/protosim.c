@@ -9,6 +9,7 @@
 
 #include <pthread.h>
 #include <stdint.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,7 @@
 #include "profiling.h"
 #include "ihex_loader.h"
 #include "reset.h"
+#include "stimulus.h"
 
 /* ═══════════════════════════════════════════════════════════════
    Globals (Definitions)
@@ -53,6 +55,13 @@ char *opt_uart0_in = NULL;
 char *opt_uart0_out = NULL;
 char *opt_exit_on_uart = NULL;
 int opt_wait_tcp = 0;
+
+int opt_warp = 0;      /* a sleeping part costs no real time */
+double opt_run_ms = 0; /* stop after this much simulated time; 0: run on */
+
+/* SIGTERM ends the run like the end of --run-ms: reports are still written */
+static volatile sig_atomic_t stop_requested = 0;
+static void on_stop_signal(int sig) { stop_requested = 1; }
 
 int force_exit_success = 0;
 FILE *uart0_out_file = NULL;
@@ -145,6 +154,21 @@ int main(int argc, char *argv[]) {
         "  --reset-vector <addr>  Where a reset leads, e.g. 0x7800 for a boot section\n"
         "                         (default: 0, or the entry of --bootloader)\n"
         "  SIGUSR1 / SIGUSR2      Pull the reset pin / cycle the power of a running simulation\n"
+        "\nPins and analog inputs (times are simulated ms; a pin is a port and a bit, B3):\n"
+        "  --soft-uart <rx>,<tx>[,<baud>[,<gap>]]\n"
+        "                         A serial line on two pins, on the PTY in place of UART0, for parts\n"
+        "                         without a USART: B0,B1,9600. <rx> is where the part receives.\n"
+        "                         <gap>: idle bit times between two bytes to the part (default 20)\n"
+        "  --pin-set <pin>:<0|1>[@<ms>]   Level of an input pin, from the start or from a time\n"
+        "  --pin-wave <pin>:<period>[:<from>[:<to>]]\n"
+        "                         Square wave into a pin, e.g. a heartbeat: B2:100:0:5000\n"
+        "  --pin-pull <pin>:<0|1> External pull on a pin: what an open-drain output reads when released\n"
+        "  --pin-log <pin>        Print every change of a pin\n"
+        "  --pin-duty <pin>[:<window>]    Print the share of time a pin is high, per window (default 100 ms)\n"
+        "  --adc <ch|temp>:<mV>[@<ms>]    Voltage at an ADC input, from the start or from a time\n"
+        "  --vcc <mV>[@<ms>]      Supply voltage, as the ADC sees it\n"
+        "  --warp                 A sleeping part costs no real time\n"
+        "  --run-ms <ms>          Stop after this much simulated time\n"
         "\nLLM Debug tools:\n"
         "  -b <addr|symbol>       Breakpoint at hex addr or ELF symbol\n"
         "  -w <addr:sz:name>      Watch SRAM variable at breakpoints\n"
@@ -224,6 +248,27 @@ int main(int argc, char *argv[]) {
       }
     } else if (!strcmp(argv[i], "--reset-vector")) {
       if (i + 1 < argc) opt_reset_vector = strtol(argv[++i], NULL, 0);
+    } else if (!strcmp(argv[i], "--warp")) {
+      opt_warp = 1;
+    } else if (!strcmp(argv[i], "--run-ms")) {
+      if (i + 1 < argc) opt_run_ms = strtod(argv[++i], NULL);
+    } else if (!strcmp(argv[i], "--soft-uart") || !strncmp(argv[i], "--pin-", 6) || !strcmp(argv[i], "--adc") ||
+               !strcmp(argv[i], "--vcc")) {
+      const char *name = argv[i];
+      const char *value = i + 1 < argc ? argv[++i] : "";
+      int r = !strcmp(name, "--soft-uart")  ? stimulus_soft_uart_arg(value)
+              : !strcmp(name, "--pin-set")  ? stimulus_pin_set_arg(value)
+              : !strcmp(name, "--pin-wave") ? stimulus_pin_wave_arg(value)
+              : !strcmp(name, "--pin-pull") ? stimulus_pin_pull_arg(value)
+              : !strcmp(name, "--pin-log")  ? stimulus_pin_log_arg(value)
+              : !strcmp(name, "--pin-duty") ? stimulus_pin_duty_arg(value)
+              : !strcmp(name, "--adc")      ? stimulus_adc_arg(value)
+              : !strcmp(name, "--vcc")      ? stimulus_vcc_arg(value)
+                                            : -1;
+      if (r < 0) {
+        fprintf(stderr, "ERROR: %s '%s' is not understood\n", name, value);
+        exit(1);
+      }
     }
   }
 
@@ -369,6 +414,8 @@ int main(int argc, char *argv[]) {
   reset_setup(avr, opt_reset_cause);
   reset_add_hook(uart0_in_rearm);
   reset_install_signals();
+  signal(SIGTERM, on_stop_signal);
+  stimulus_setup(avr);
 
   avr->log = 1 + verbose;
 
@@ -377,6 +424,8 @@ int main(int argc, char *argv[]) {
     avr->state = cpu_Stopped;
     avr_gdb_init(avr);
     printf("GDB server listening on port 1234\n");
+  } else if (opt_warp) {
+    stimulus_warp(avr);
   }
 
   /* ── Build profiling tables ───────────────────────────────── */
@@ -421,7 +470,15 @@ int main(int argc, char *argv[]) {
     }
 #else
     uart_pty_init(avr, &uart_pty);
-    uart_pty_connect(&uart_pty, '0');
+    if (stimulus_has_soft_uart()) {
+      /* the same bridge, on the line of two pins */
+      avr_irq_t *from_part, *to_part, *xon, *xoff;
+      stimulus_soft_uart_irqs(&from_part, &to_part, &xon, &xoff);
+      uart_pty_connect_irqs(&uart_pty, from_part, to_part, xon, xoff, '0');
+      avr_raise_irq(xon, 1);
+    } else {
+      uart_pty_connect(&uart_pty, '0');
+    }
     if (opt_wait_tcp) {
       printf("[TCP] Waiting for client to connect on PTY %s...\n", uart_pty.port[0].slavename);
       while (!uart_pty_is_connected(&uart_pty)) {
@@ -450,12 +507,17 @@ int main(int argc, char *argv[]) {
      ══════════════════════════════════════════════════════════ */
   long steps = 0;
   uint64_t last_trace_cyc = 0;
+  uint64_t asleep_cycles = 0;
+  uint64_t run_cycles = (uint64_t)(opt_run_ms * freq / 1000.0);
 
   while (1) {
     uint32_t pre_pc = avr->pc;
     uint64_t pre_cycle = avr->cycle;
 
     int state = avr_run(avr);
+
+    /* a sleeping part moves straight to its next event */
+    if (state == cpu_Sleeping && avr->cycle > pre_cycle) asleep_cycles += avr->cycle - pre_cycle;
 
     if (opt_coverage || opt_profile || opt_callgraph)
       profiling_step(pre_pc, pre_cycle, avr->pc, avr->cycle);
@@ -471,6 +533,11 @@ int main(int argc, char *argv[]) {
 
     if (force_exit_success) {
       printf("[DBG] SUCCESS: Match '--exit-on-uart %s' found. Exiting correctly.\n", opt_exit_on_uart);
+      break;
+    }
+
+    if (stop_requested || (run_cycles && reset_total_cycles(avr) >= run_cycles)) {
+      printf("[DBG] stopped at %.3f ms\n", (double)reset_total_cycles(avr) * 1000.0 / freq);
       break;
     }
 
@@ -516,6 +583,12 @@ int main(int argc, char *argv[]) {
     if (opt_callgraph) report_callgraph(pout, avr->cycle, freq);
 
     if (pout && pout != stdout) fclose(pout);
+  }
+
+  if (asleep_cycles) {
+    uint64_t total = reset_total_cycles(avr);
+    printf("[SLEEP] asleep %.2f%% of %.3f ms, awake %.3f ms\n", 100.0 * (double)asleep_cycles / (double)total,
+           (double)total * 1000.0 / freq, (double)(total - asleep_cycles) * 1000.0 / freq);
   }
 
   if (uart0_out_file) fclose(uart0_out_file);

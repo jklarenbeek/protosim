@@ -52,6 +52,7 @@ typedef struct uart_pty_t {
 	pthread_t	thread;
 	int			xon;
 	int			hastap;
+	volatile int	stop;		// tells the thread to end
 
 	union {
 		struct {
@@ -73,6 +74,15 @@ void
 uart_pty_connect(
 		uart_pty_t * p,
 		char uart);
+
+void
+uart_pty_connect_irqs(
+		uart_pty_t * p,
+		avr_irq_t * from,
+		avr_irq_t * to,
+		avr_irq_t * xon,
+		avr_irq_t * xoff,
+		char name);
 
 int uart_pty_is_connected(uart_pty_t * p);
 
