@@ -79,7 +79,7 @@
   <thead><tr><th style="width:20%">Tool family</th><th>Proposed interface</th></tr></thead>
   <tbody>
     <tr><td>Environment</td><td><code>doctor(options)</code>, <code>list_target_profiles()</code>, <code>get_capabilities()</code></td></tr>
-    <tr><td>Session</td><td><code>debug_start(build_id, profile_id)</code>, <code>debug_status(session_id)</code>, <code>debug_close(session_id)</code></td></tr>
+    <tr><td>Session</td><td><code>debug_start(build_id, profile_id)</code> (<span class="tag n">2.1</span> <code>profile_id</code> may be left out: the default profile of section 13 applies and is named in the response), <code>debug_status(session_id)</code>, <code>debug_close(session_id)</code></td></tr>
     <tr><td>Execution</td><td><code>debug_continue(session_id, limits)</code>, <code>debug_pause(session_id)</code>, <code>debug_step(session_id, mode)</code></td></tr>
     <tr><td>Breakpoints</td><td><code>debug_breakpoint(session_id, action, location, condition)</code>, <code>debug_watchpoint(...)</code></td></tr>
     <tr><td>Inspection</td><td><code>debug_inspect(session_id, expressions, limits)</code>, <code>debug_backtrace(...)</code>, <code>read_memory(space, address, length)</code></td></tr>
@@ -198,8 +198,8 @@
 <table class="tight">
   <thead><tr><th style="width:30%">Profile</th><th class="num">Flash</th><th class="num">Usable SRAM</th><th>Status</th></tr></thead>
   <tbody>
-    <tr><td>Stock ATmega2560</td><td class="num">262,144 B</td><td class="num">8,192 B</td><td>Existing device model; integration tests still required. <span class="tag n">2.1</span> Protoduino's timers do not compile for it (PD17).</td></tr>
-    <tr><td>Stock ATmega328P <span class="tag n">2.1</span></td><td class="num">32,768 B</td><td class="num">2,048 B</td><td>The part every executed check of this edition and the whole loader work ran on. The dependable first profile.</td></tr>
+    <tr><td><strong>Stock ATmega328P</strong> <span class="tag n">2.1</span></td><td class="num">32,768 B</td><td class="num">2,048 B</td><td><strong>The first profile and the default.</strong> It is the part <code>protosim -m</code> already assumes, the part every executed check of this edition ran on, and the one Protoduino builds for unchanged.</td></tr>
+    <tr><td>Stock ATmega2560</td><td class="num">262,144 B</td><td class="num">8,192 B</td><td>Second stock profile. Existing device model; integration tests still required. <span class="tag n">2.1</span> Protoduino's timers do not compile for it (PD17); with that one header widened, the loader's kernel ran on it.</td></tr>
     <tr><td>Virtual Mega2560 / data64k</td><td class="num">262,144 B</td><td class="num">65,024 B</td><td>Proposed expanded data-space profile</td></tr>
     <tr><td>Virtual Mega2560 / flash1m</td><td class="num">1,048,576 B</td><td class="num">65,024 B</td><td>Experimental; qualify high-address behaviour first</td></tr>
     <tr><td>Smaller AVR</td><td class="num">device</td><td class="num">device</td><td>Exact supported MCU and I/O adapters required</td></tr>
@@ -207,24 +207,31 @@
 </table>
 <p>For the Mega2560 mapping, SRAM begins at <code>0x0200</code>. Extending the last data address to <code>0xFFFF</code> yields 65,536 &minus; 512 = 65,024 bytes, or 63.5 KiB of usable SRAM. Calling this &ldquo;64 KiB RAM&rdquo; without qualification is misleading: it is a 64 KiB total data address space, including registers and I/O. Stock flash/SRAM and the address map follow the device definitions. [S6, R4]</p>
 <pre><code>profile:
+  id: stock-atmega328p-v1            <span class="c"># the default: used when no profile is named</span>
+  kind: stock
+  base_mcu: atmega328p
+  clock_hz: 16000000
+  flash_bytes: 32768
+  sram_start: 256
+  usable_sram_bytes: 2048
+  boot:                              <span class="c"># new in 2.1</span>
+    section_bytes: 2048              <span class="c"># what the BOOTSZ fuses reserve</span>
+    reset_into: bootloader           <span class="c"># BOOTRST</span>
+    image: protoduino-boot-2k        <span class="c"># or optiboot-8.3, or none</span>
+  modules: {base: 0x6000, slots: 2, slot_bytes: 2048}
+  qualification: default
+profile:
   id: virtual-mega2560-256k-data64k-v1
   kind: virtual
   base_mcu: atmega2560
-  clock_hz: 16000000
-  flash_bytes: 262144
-  data_space_bytes: 65536
-  sram_start: 512
-  usable_sram_bytes: 65024
+  data_space_bytes: 65536            <span class="c"># sram_start 512, usable 65024</span>
   linker_layout: generated-and-hashed
   feature_manifest: protoduino-full-fixture-v1
-  boot:                              <span class="c"># new in 2.1</span>
-    section_bytes: 4096              <span class="c"># what the BOOTSZ fuses reserve</span>
-    reset_into: bootloader           <span class="c"># BOOTRST</span>
-    image: protoduino-boot-2912      <span class="c"># or optiboot-8.3, or none</span>
-  modules: {base: 0x6000, slots: 2, slot_bytes: 2048}
+  boot: {section_bytes: 4096, reset_into: bootloader, image: protoduino-boot-4k}
   qualification: experimental</code></pre>
+<p><span class="tag n">2.1</span> <strong>The default is never silent.</strong> A call that names no profile gets <code>stock-atmega328p-v1</code>; <code>list_target_profiles()</code> marks it, and every response and evidence bundle names the profile that was resolved. <code>protosim -m</code> already defaults to the same part.</p>
 <p>Apply geometry before <code>avr_init()</code> allocates storage. Validate loadable section ranges, SRAM initialisation and stack start. Reject contradictory embedded ELF MCU/frequency metadata instead of silently overriding a selected profile. Store actual resolved configuration, not just a profile name. Existing command-line <code>-m</code>/<code>-f</code> behaviour can remain available with an explicit conflict policy. [S1, S5]</p>
-<p><span class="tag n">2.1</span> <strong>A profile also has a boot section.</strong> Which bootloader a board carries, how large its section is and where reset goes decide what firmware can do: on a megaAVR only code in the boot section can program flash. The loader work measured what fits where: its bootloader with the load thread offered to the kernel is 2,040 bytes on the ATmega328P, which fills the 2 KB section, and 2,912 bytes with every option on the ATmega2560, which needs the 4 KB section because the 2 KB one is too small. A profile that does not record this cannot reproduce a loader run.</p>
+<p><span class="tag n">2.1</span> <strong>A profile also has a boot section.</strong> Which bootloader a board carries, how large its section is and where reset goes decide what firmware can do: on a megaAVR only code in the boot section can program flash. The loader work measured what fits where: its bootloader with the load thread offered to the kernel is 2,026 bytes on the ATmega328P, which fills the 2 KB section; on the ATmega2560 and ATmega1284P it takes the 4 KB section, which is now the standard for those parts, with every option in 2,898 bytes. A profile that does not record the boot section cannot reproduce a loader run.</p>
 <p class="small">Some real Mega devices support external SRAM. A matching board/XMEM configuration, pin use and wait-state model is a separate hardware profile; virtual enlarged SRAM does not automatically model those physical timings. [R4]</p>
 
 <h2><span class="n">14</span>Memory engineering</h2>
@@ -242,7 +249,7 @@
     <tr><td>Dynamic use</td><td>Pool occupancy, retained vnode/text storage and heap use if enabled; do not double-count allocations already in static storage.</td></tr>
     <tr><td>Stack reserve</td><td>Record observed minimum SP/high-water evidence under scenarios. This is observed coverage, not a proof of worst-case stack usage.</td></tr>
     <tr><td>Timing</td><td>Instruction/cycle measurements for the modelled CPU and peripherals; separate sleep/interrupt time and host elapsed time. <span class="tag n">2.1</span> State what the model leaves out: simavr programs a flash page in no time, a chip takes 7 to 9 ms with interrupts off (AV05).</td></tr>
-    <tr><td>Fairness <span class="tag n">2.1</span></td><td>Turns a reference process gets, and its longest wait, while a scenario runs. The loader work measured 18,055 turns and a longest wait of 15.0 ms during a 350 ms module load, and 2.0 ms with one scheduler function changed (PD14).</td></tr>
+    <tr><td>Fairness <span class="tag n">2.1</span></td><td>Turns a reference process gets, and its longest wait, while a scenario runs. The loader work measured 17,744 turns and a longest wait of 15.1 ms during a 350 ms module load, and 1.9 ms with one scheduler function changed (PD14).</td></tr>
   </tbody>
 </table>
 <p>Define a full-feature fixture that actually invokes scheduler, IPC, Unicode and TUI paths and includes representative buffers and texts. Merely enabling configuration flags can leave unused code removed by the linker. Establish measured flash, static RAM and runtime headroom before claiming that 256 KiB flash or a 63.5 KiB SRAM profile is sufficient.</p>
@@ -266,7 +273,7 @@
 </table>
 <p><strong>Test abstraction.</strong> Express tests as logical input/output actions, then map them to each target: a serial packet on a Mega may become a test-harness input to a pure controller function on a device without the same UART. State clearly when the transport differs. A component-only success is not a success for the complete terminal-enabled application. Use target-specific deadline assertions rather than expecting identical instruction counts. Preserve input ordering, required results and failure behaviour. Sweep boundary values and queue pressure before reducing capacities. Select headroom policies explicitly; a minimal linkable image with no runtime reserve is not a deployable result.</p>
 <p><strong>Evidence for design decisions.</strong> Produce a candidate matrix with exact builds and rejected-target reasons. Keep acceptance tests stable while the model modifies implementation. Changing a required feature or relaxing a deadline is a requirements decision, not an optimisation. Report &ldquo;smallest among tested candidates&rdquo; unless the search exhaustively covers the defined candidate space.</p>
-<p><span class="tag n">2.1</span> <strong>A worked instance exists.</strong> The loader work builds one bootloader source for four parts and fills each boot section with as many options as fit, by building and measuring: 2,040 of 2,048 bytes on the ATmega328P, nothing in 2 KB on the ATmega2560, everything in 4 KB. Its <code>fit.sh</code> is a small resource-frontier search of the kind this section describes, and its result table states which candidates were rejected and why.</p>
+<p><span class="tag n">2.1</span> <strong>A worked instance exists.</strong> The loader work builds one bootloader source for four parts and fills each boot section with as many options as fit, by building and measuring: 2,026 of 2,048 bytes on the ATmega328P, nothing in 2 KB on the ATmega2560, everything in 4 KB. Its <code>fit.sh</code> is a small resource-frontier search of the kind this section describes, and its result table states which candidates were rejected and why.</p>
 
 <h2><span class="n">16</span>Vnode terminal UI</h2>
 
@@ -294,7 +301,7 @@
 <table>
   <thead><tr><th style="width:21%">Stage</th><th style="width:33%">Scope of edition 2.0</th><th>Status</th></tr></thead>
   <tbody>
-    <tr><td><strong>L0</strong> whole firmware</td><td>Continue using the normal compiled-image load/reset path. Do not describe this as live module replacement.</td><td>A serial bootloader takes the unmodified <code>.elf</code> as a stream, over XMODEM-CRC from any terminal program. It checks the file from its headers, refuses before it erases, and makes an image valid only by a record written last. 1,952 bytes on the ATmega328P. 13 scenarios pass in simavr, including a 106 KB image on the ATmega2560. <span class="tag m">executed</span></td></tr>
+    <tr><td><strong>L0</strong> whole firmware</td><td>Continue using the normal compiled-image load/reset path. Do not describe this as live module replacement.</td><td>A serial bootloader takes the unmodified <code>.elf</code> as a stream, over XMODEM-CRC from any terminal program. It checks the file from its headers, refuses before it erases, and makes an image valid only by a record written last. 1,938 bytes on the ATmega328P. 21 scenarios pass in simavr, including a 106 KB image on the ATmega2560. <span class="tag m">executed</span></td></tr>
     <tr><td><strong>L1</strong> host-linked package</td><td>Link for a reserved flash slot on the host; include initialised data, zero-fill requirements, entry and ABI metadata. The device validates and writes the image.</td><td>Done, with the ELF file as the package. A module is a Protoduino process type linked for a slot against the symbols of one kernel build; its first bytes are a descriptor with magic, ABI version and the kernel's identity. 9 scenarios pass on the unmodified scheduler, also with a stock Optiboot 8.3 as the bootloader. <span class="tag m">executed</span></td></tr>
     <tr><td><strong>L2</strong> bounded ELF object support</td><td>Accept selected <code>ET_REL</code> inputs only after defining supported sections, relocation kinds, import resolution, alignment and rejection behaviour.</td><td>Not done and argued against: linking on the device is what made Contiki's loader large and is why Contiki-NG removed it. Proposed in its place: slots aligned to 512 bytes and a sorted list of high-byte fix-ups applied as the stream passes, so one file loads into any slot without a relocator. <span class="tag p">proposed</span></td></tr>
     <tr><td><strong>L3</strong> lifecycle / replacement</td><td>Quiesce owned processes, callbacks, timers and messages; remove stale references; commit replacement only after validation.</td><td>Partly: a module table written after validation, start through <code>process_new()</code>, restart after reset, a second module beside a running one. Missing: stop, unload, replacement, and everything PD01, PD02 and PD04 stand in the way of.</td></tr>
@@ -321,11 +328,11 @@
   </tbody>
 </table>
 
-<p><strong>What it adds beyond the contract.</strong> The load is one Protothreads v2 thread that does no I/O. The bootloader schedules it at reset; a Protoduino process schedules the same code, where it sits in the boot section, while the system runs. Loading therefore does not stop the scheduler: a heartbeat process took 18,055 turns during a 350 ms load. And the same thread loads through Optiboot's <code>do_spm</code> when the kernel links its own copy, so a board keeps its bootloader.</p>
+<p><strong>What it adds beyond the contract.</strong> The load is one Protothreads v2 thread that does no I/O. The bootloader schedules it at reset; a Protoduino process schedules the same code, where it sits in the boot section, while the system runs. Loading therefore does not stop the scheduler: a heartbeat process took 17,744 turns during a 350 ms load. And the same thread loads through Optiboot's <code>do_spm</code> when the kernel links its own copy, so a board keeps its bootloader.</p>
 
 <div class="box warn">
 <h4>What simulation cannot show about a loader</h4>
-<p>The loader goes through the firmware path, as edition 2.0 demands. That is still not hardware evidence, for a reason edition 2.0 does not name: simavr executes SPM from anywhere, replaces a page without an erase, has no read-while-write lockout and programs in no time (AV02 to AV05). A loader that forgot the erase, forgot to re-enable the application section, did not wait, or ran outside the boot section would pass every one of the 22 scenarios. A strict flash mode in Protosim that reports those four would turn blind spots into test failures; it is the most valuable single addition for stage G5.</p>
+<p>The loader goes through the firmware path, as edition 2.0 demands. That is still not hardware evidence, for a reason edition 2.0 does not name: simavr executes SPM from anywhere, replaces a page without an erase, has no read-while-write lockout and programs in no time (AV02 to AV05). A loader that forgot the erase, forgot to re-enable the application section, did not wait, or ran outside the boot section would pass every one of the 33 scenarios. A strict flash mode in Protosim that reports those four would turn blind spots into test failures; it is the most valuable single addition for stage G5.</p>
 </div>
 
 <p class="small">Full design, measurements and code: <code>protoduino/docs/elf-loader-design.pdf</code> and <code>protoduino/docs/elfloader/</code>. The code sits beside the library at the paths it would have in it; no library source file was changed.</p>
@@ -344,7 +351,7 @@
     <tr><td>MCP</td><td>Existing batch compatibility; persistent state; cancellation; concurrent requests; argument handling; client disconnect and process cleanup.</td></tr>
     <tr><td>Protoduino</td><td>Queue full/empty/wrap; cleanup with no incoming events; poll traversal under finalisation; message ownership and restart generations. <span class="tag n">2.1</span> Events under continuous polls; output of the serial process without further polls.</td></tr>
     <tr><td>TUI</td><td>Content mutation, removed elements, old bounds, partial output and width policy; compare UART reconstruction with expected terminal state.</td></tr>
-    <tr><td>Migration / loader</td><td>One behaviour contract on two qualified profiles; loader rejection and recovery; high-address suite before 1 MiB qualification. <span class="tag n">2.1</span> The loader's T1 to T13 and M1 to M9 through Protosim and MCP.</td></tr>
+    <tr><td>Migration / loader</td><td>One behaviour contract on two qualified profiles; loader rejection and recovery; high-address suite before 1 MiB qualification. <span class="tag n">2.1</span> The loader's T1 to T21 and M1 to M12 through Protosim and MCP.</td></tr>
   </tbody>
 </table>
 
@@ -387,7 +394,7 @@
   </tbody>
 </table>
 
-<p><strong>Recommended scope of the first dependable release.</strong> Deliver doctor, truthful batch outcomes, persistent GDB sessions, basic UART interaction, source-linked results and one complete MCP demonstration on a stock MCU. Keep virtual-memory engineering as a parallel workstream only after baseline instrumentation is trustworthy. The agent workflow can be useful before the most ambitious memory and loader work is finished. <span class="tag n">2.1</span> Make the stock MCU the ATmega328P: everything in this edition ran on it, and Protoduino builds for it.</p>
+<p><strong>Recommended scope of the first dependable release.</strong> Deliver doctor, truthful batch outcomes, persistent GDB sessions, basic UART interaction, source-linked results and one complete MCP demonstration on a stock MCU. Keep virtual-memory engineering as a parallel workstream only after baseline instrumentation is trustworthy. The agent workflow can be useful before the most ambitious memory and loader work is finished. <span class="tag n">2.1</span> The stock MCU is the ATmega328P, the first and default profile: everything in this edition ran on it, and Protoduino builds for it.</p>
 <p>Do not estimate completion dates solely from this document. Owners should validate toolchain availability and the defect reproductions, then estimate bounded milestones. The current MCP TypeScript code makes a TypeScript controller a practical default, subject to team review; GDB and simavr remain separate native components.</p>
 
 <h2><span class="n">21</span>Design decisions</h2>
@@ -398,7 +405,7 @@
     <tr><td>Execution ownership</td><td>One controller owns GDB and simulator control per instance. A second UI attaches through it, not as an independent command source.</td></tr>
     <tr><td>Simulator side channel</td><td>Small versioned local endpoint for budgets, scheduled I/O and metrics; keep GDB for source debugging.</td></tr>
     <tr><td>Session lifetime</td><td>Start with stdio-owned child processes and clean shutdown. Add a reattachable daemon only when a demonstrated workflow needs it.</td></tr>
-    <tr><td>Target qualification</td><td><span class="tag n">2.1</span> Stock ATmega328P first, then stock Mega2560 once Protoduino builds for it; virtual data64k next; 1 MiB flash experimental until its boundary suite passes.</td></tr>
+    <tr><td>Target qualification</td><td><span class="tag n">2.1</span> Decided: the stock ATmega328P is the first profile and the default. Then the stock Mega2560 once Protoduino builds for it; virtual data64k next; 1 MiB flash experimental until its boundary suite passes.</td></tr>
     <tr><td>TUI correctness</td><td>Explicit dirty/content-generation and removal invalidation; bounded metadata, no mandatory AVR framebuffer.</td></tr>
     <tr><td>Module scope</td><td><span class="tag n">2.1</span> Host-linked ELF in a slot, as built. Decide between the fix-up stream and an on-device relocator before either is started; decide whether a module checksum is stored.</td></tr>
     <tr><td>Protocol compatibility</td><td>Version schemas; expose capabilities; preserve existing tools and CLI behaviour except clearly documented bug fixes.</td></tr>
@@ -409,5 +416,5 @@
 </table>
 
 <p><strong>Ambitious additions with concrete value.</strong> Failure minimisation: reduce a failing input trace to the shortest reproducer while preserving the assertion failure. Resource-frontier search: explore target/configuration combinations and report measured Pareto tradeoffs. Runtime explanation: join process/queue snapshots with the source and terminal at the same stop. Cross-build comparison: highlight changed behaviour and budgets for the same scenario. These are proposed extensions, not current capabilities.</p>
-<p><strong>Success measures.</strong> Measure time from a clean checkout to the first successful debug session; percentage of scenario runs with complete provenance; reproducibility of failures; verified fix rate on a curated defect set; resource savings without requirement loss; and rate of incorrectly reported success. Compare AI-assisted and manual workflows using the same fixtures, environment and completion criteria. <span class="tag n">2.1</span> The curated defect set now has 57 entries with a trigger each (22 to 28).</p>
+<p><strong>Success measures.</strong> Measure time from a clean checkout to the first successful debug session; percentage of scenario runs with complete provenance; reproducibility of failures; verified fix rate on a curated defect set; resource savings without requirement loss; and rate of incorrectly reported success. Compare AI-assisted and manual workflows using the same fixtures, environment and completion criteria. <span class="tag n">2.1</span> The curated defect set now has 58 entries with a trigger each (22 to 28).</p>
 <p class="small">The product goal is a distinctive AI toolbox. The defensible claim is the combination of capabilities and measured outcomes; &ldquo;one of a kind&rdquo; should remain a positioning ambition until supported by comparative research.</p>
