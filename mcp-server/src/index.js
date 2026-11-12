@@ -116,7 +116,7 @@ const runSimulationTool = {
             flags: {
                 type: "array",
                 items: { type: "string" },
-                description: "Additional protosim flags, one array entry per argument (e.g., ['--coverage', '--profile', '--callgraph', '--dump-regs']). Resets: ['--reset-at', '20:pin'] resets the part at 20 ms of simulated time with cause power, pin, brownout or watchdog; ['--reset-cause', 'pin'] sets the cause the first start reports in MCUSR; ['--reset-vector', '0x7800'] sets where a reset leads.",
+                description: "Additional protosim flags, one array entry per argument (e.g., ['--coverage', '--profile', '--callgraph', '--dump-regs']). Resets: ['--reset-at', '20:pin'] resets the part at 20 ms of simulated time with cause power, pin, brownout or watchdog; ['--reset-cause', 'pin'] sets the cause the first start reports in MCUSR; ['--reset-vector', '0x7800'] sets where a reset leads. Pins and analog inputs: ['--soft-uart', 'B0,B1,9600'] bridges a serial line on two pins for parts without a USART; ['--pin-wave', 'B2:200:0:6000'], ['--pin-set', 'B2:1@500'] and ['--pin-pull', 'B3:1'] drive pins; ['--pin-log', 'B3'] and ['--pin-duty', 'B4'] report them; ['--adc', '3:2500'] and ['--vcc', '4000@20000'] set voltages in mV; ['--warp'] makes sleep cost no real time, ['--run-ms', '30000'] stops after that simulated time, ['--dump-eeprom', '16:3'] prints EEPROM at the end.",
             },
         },
         required: ["elf_path", "max_steps"],

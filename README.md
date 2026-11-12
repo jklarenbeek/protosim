@@ -160,6 +160,47 @@ cat out.txt
 # start 01: MCUSR=01 power-on        (a power-on clears RAM, so the counter starts again)
 ```
 
+### Pins and analog inputs
+
+A part without a USART talks on port pins, and what small firmware does is mostly
+seen on pins. These options are the outside world for it. Times are simulated time in
+ms; a pin is a port letter and a bit, `B3`.
+
+| Flag | Argument | Effect |
+|------|----------|--------|
+| `--soft-uart` | `<rx>,<tx>[,<baud>[,<gap>]]` | A serial line on two pins, bridged to the PTY in place of UART0: `B0,B1,9600`. `<rx>` is the pin the part receives on. `<gap>` is the idle time between two bytes sent to the part, in bit times (default 20): firmware that takes a byte in an interrupt handler needs it. |
+| `--pin-set` | `<pin>:<0\|1>[@<ms>]` | Level of an input pin, from the start or from a time. |
+| `--pin-wave` | `<pin>:<period>[:<from>[:<to>]]` | Square wave into a pin, e.g. a heartbeat that stops: `B2:200:0:6000`. |
+| `--pin-pull` | `<pin>:<0\|1>` | External pull on a pin: what an open-drain output reads when it is released. |
+| `--pin-log` | `<pin>` | Print every change of a pin: `[PIN] B3=0 at 10016.758 ms`. |
+| `--pin-duty` | `<pin>[:<window>]` | Print the share of time a pin was high, per window (default 100 ms): `[DUTY] B4 37.5% at 500.000 ms`. |
+| `--adc` | `<channel\|temp>:<mV>[@<ms>]` | Voltage at an ADC input or at the temperature sensor, from the start or from a time. Repeatable. |
+| `--vcc` | `<mV>[@<ms>]` | Supply voltage, as the ADC sees it. |
+| `--warp` | | A sleeping part costs no real time: hours of a part that sleeps run in seconds. |
+| `--run-ms` | `<ms>` | Stop after this much simulated time. |
+| `--dump-eeprom` | `<addr>:<len>` | Print that part of EEPROM when the run ends. |
+
+When the run ends and the part has slept, the share is printed:
+`[SLEEP] asleep 99.99% of 640000.000 ms, awake 42.077 ms`. `SIGTERM` ends a run like the
+end of `--run-ms`, with its reports.
+
+```bash
+# an ATtiny85 that watches a board: the heartbeat on B2 stops after 6 s, the supply sags at 20 s
+bin/protosim keeper.elf -m attiny85 -f 8000000 --soft-uart B0,B1,9600 --warp \
+    --pin-pull B3:1 --pin-log B3 --vcc 5000 \
+    --pin-wave B2:200:0:6000 --vcc 4000@20000 --vcc 5000@24000 --run-ms 30000
+# [PIN] B3=0 at 10016.758 ms      the reset line, 4 s after the last heartbeat
+# [PIN] B3=1 at 10112.757 ms
+# [PIN] B3=0 at 20242.602 ms      held while the supply is low
+# [PIN] B3=1 at 24082.594 ms
+```
+
+Two things protosim corrects in simavr here: the flags of the external and pin change
+interrupts are cleared by writing a one, as on a chip (simavr sets them, or drops the
+write); and the last byte of flash of an ELF file is loaded. Two things it does not:
+simavr does not tell sleep modes apart, so a timer wakes a part that is powered down,
+and it does not make the PWM of timer 1 of an ATtiny at its pin.
+
 `tests/test_reset_cause.sh` checks all of this.
 
 ### Profiling (ELF only — requires symbol table)

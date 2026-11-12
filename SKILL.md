@@ -82,6 +82,20 @@ bin/protosim app.elf --uart0-out out.txt --max-steps 3000000 --reset-at 20:pin -
 ```
 Each reset appears in the log as `[RST] pin reset at 20.000 ms → PC=0x0000 MCUSR=0x02`.
 
+### Pins, Analog Inputs and Sleep
+For firmware that works on pins and for parts without a USART (ATtiny25/45/85). Times are simulated ms; a pin is `B3`.
+- `--soft-uart <rx>,<tx>[,<baud>[,<gap>]]`: A serial line on two pins on the PTY in place of UART0 (e.g. `B0,B1,9600`; `<rx>` is where the part receives).
+- `--pin-set <pin>:<0|1>[@<ms>]`, `--pin-wave <pin>:<period>[:<from>[:<to>]]`, `--pin-pull <pin>:<0|1>`: Drive input pins; give an open-drain line its pull-up.
+- `--pin-log <pin>`: Log every change (`[PIN] B3=0 at 10016.758 ms`). `--pin-duty <pin>[:<window>]`: Log the duty cycle per window.
+- `--adc <channel|temp>:<mV>[@<ms>]`, `--vcc <mV>[@<ms>]`: Voltages at ADC inputs and the supply; repeatable to change them over time.
+- `--warp`: A sleeping part costs no real time. `--run-ms <ms>`: Stop after that much simulated time. `--dump-eeprom <addr>:<len>`: Print EEPROM at the end.
+- At the end of a run with sleep: `[SLEEP] asleep 99.99% of 640000.000 ms, awake 42.077 ms`.
+
+Example: a watchdog chip whose heartbeat input stops after 6 s must pull its reset output about 4 s later:
+```bash
+bin/protosim keeper.elf -m attiny85 -f 8000000 --warp --pin-pull B3:1 --pin-log B3 --vcc 5000 --pin-wave B2:200:0:6000 --run-ms 15000
+```
+
 ## 5. Troubleshooting
 - If step limits are reached before target behavior occurs, **increase `--max-steps`**.
 - If a function shows 0% coverage (`NEVER REACHED`), ensure your step budget is high enough and that proper UART input was provided to trigger those code paths.
