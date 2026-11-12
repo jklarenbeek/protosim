@@ -104,6 +104,19 @@ uart_pty_t uart_pty;
    main
    ═══════════════════════════════════════════════════════════════ */
 
+/* simavr's ELF loader takes the last flash address as its limit, so a file
+   that fills flash to its last byte arrives one byte short ("would overflow
+   buffer"). A bootloader keeps its version or a service table there. The
+   loader frees the chunks, so the byte is picked up before it runs. */
+static void load_firmware_whole(avr_t *a, elf_firmware_t *fw) {
+  int last = -1;
+  for (fw_chunk_t *c = fw->chunks; c; c = c->next)
+    if (c->addr < AVR_SEGMENT_OFFSET_DATA && c->size && c->addr + c->size == a->flashend + 1)
+      last = c->data[c->size - 1];
+  avr_load_firmware(a, fw);
+  if (last >= 0) a->flash[a->flashend] = (uint8_t)last;
+}
+
 int main(int argc, char *argv[]) {
   char *mmcu = "atmega328p";
   const char *filename = NULL;
@@ -271,7 +284,7 @@ int main(int argc, char *argv[]) {
     avr->pc = hex_base;
     avr->codeend = hex_base + hex_size;
   } else {
-    avr_load_firmware(avr, &f);
+    load_firmware_whole(avr, &f);
     if (avr->codeend == 0 || avr->codeend == avr->flashend) {
       uint32_t old_codeend = avr->codeend;
       avr->codeend = 0;
@@ -329,7 +342,7 @@ int main(int argc, char *argv[]) {
       }
       avr_t *tmp = avr_make_mcu_by_name(mmcu);
       avr_init(tmp);
-      avr_load_firmware(tmp, &bl_fw);
+      load_firmware_whole(tmp, &bl_fw);
       /* simavr does not set the program counter when it loads a file: the
          bootloader begins at the lowest address it occupies */
       while (bl_entry <= tmp->flashend && tmp->flash[bl_entry] == 0xff) bl_entry++;
