@@ -249,7 +249,7 @@ profile:
     <tr><td>Dynamic use</td><td>Pool occupancy, retained vnode/text storage and heap use if enabled; do not double-count allocations already in static storage.</td></tr>
     <tr><td>Stack reserve</td><td>Record observed minimum SP/high-water evidence under scenarios. This is observed coverage, not a proof of worst-case stack usage.</td></tr>
     <tr><td>Timing</td><td>Instruction/cycle measurements for the modelled CPU and peripherals; separate sleep/interrupt time and host elapsed time. <span class="tag n">2.1</span> State what the model leaves out: simavr programs a flash page in no time, a chip takes 7 to 9 ms with interrupts off (AV05).</td></tr>
-    <tr><td>Fairness <span class="tag n">2.1</span></td><td>Turns a reference process gets, and its longest wait, while a scenario runs. The loader work measured 17,741 turns and a longest wait of 15.1 ms during a 350 ms module load, and 2.2 ms with one scheduler function changed (PD14).</td></tr>
+    <tr><td>Fairness <span class="tag n">2.1</span></td><td>Turns a reference process gets, and its longest wait, while a scenario runs. The loader work measured 15,113 turns and a longest wait of 15.2 ms during a 350 ms module load, and 2.0 ms with one scheduler function changed (PD14).</td></tr>
   </tbody>
 </table>
 <p>Define a full-feature fixture that actually invokes scheduler, IPC, Unicode and TUI paths and includes representative buffers and texts. Merely enabling configuration flags can leave unused code removed by the linker. Establish measured flash, static RAM and runtime headroom before claiming that 256 KiB flash or a 63.5 KiB SRAM profile is sufficient.</p>
@@ -328,7 +328,7 @@ profile:
   </tbody>
 </table>
 
-<p><strong>What it adds beyond the contract.</strong> The load is one Protothreads v2 thread that does no I/O. The bootloader schedules it at reset; a Protoduino process schedules the same code, where it sits in the boot section, while the system runs. Loading therefore does not stop the scheduler: a heartbeat process took 17,741 turns during a 350 ms load. The same thread loads through Optiboot's <code>do_spm</code>, so a board can keep its bootloader.</p>
+<p><strong>What it adds beyond the contract.</strong> The load is one Protothreads v2 thread that does no I/O. The bootloader schedules it at reset; a Protoduino process schedules the same code, where it sits in the boot section, while the system runs. Loading therefore does not stop the scheduler: a heartbeat process took 15,113 turns during a 350 ms load. The same thread loads through Optiboot's <code>do_spm</code>, so a board can keep its bootloader.</p>
 
 <div class="box warn">
 <h4>What simulation cannot show about a loader</h4>
