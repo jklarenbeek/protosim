@@ -20,7 +20,7 @@ const html = `<!doctype html>
 
 const out = join(here, '..', 'Protosim_Protoduino_Functional_Technical_Report.pdf');
 const footer = `<div style="width:100%; font-family:Inter,sans-serif; font-size:7.5px; color:#5b6672; padding:0 17mm; display:flex; justify-content:space-between;">
-  <span>Protosim + Protoduino &middot; engineering decision report &middot; v2.1 r3</span>
+  <span>Protosim + Protoduino &middot; engineering decision report &middot; v2.1 r4</span>
   <span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`;
 
 const browser = await chromium.launch();
