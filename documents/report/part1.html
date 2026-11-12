@@ -4,13 +4,13 @@
     <h1>Protosim + Protoduino</h1>
     <p class="sub">An AI toolbox grounded in executable evidence: persistent GDB debugging, model-independent MCP tools, source-aware inspection, configurable AVR profiles, environment diagnosis, reproducible development and migration.</p>
   </div>
-  <div class="meta"><span>Version 2.1, revision 5 &middot; 12 November 2026 &middot; reviewed edition</span><span>Prepared for Johannes Klarenbeek and the development team</span></div>
+  <div class="meta"><span>Version 2.1, revision 6 &middot; 12 November 2026 &middot; reviewed edition</span><span>Prepared for Johannes Klarenbeek and the development team</span></div>
 
   <div class="keyfacts">
     <div><div class="v">16 of 25</div><div class="l">findings of edition 2.0 re-run here; all 16 hold, six of them worse than stated</div></div>
     <div><div class="v">GDB works</div><div class="l">avr-gdb 15 against <code>protosim -d</code>: break, step, inspect, watch, interrupt</div></div>
     <div><div class="v">3</div><div class="l">statements of edition 2.0 corrected, none of them a design decision</div></div>
-    <div><div class="v">34</div><div class="l">findings added, most from building a bootloader and module loader on Protoduino</div></div>
+    <div><div class="v">35</div><div class="l">findings added, most from building a bootloader and module loader on Protoduino</div></div>
   </div>
 
   <div class="box accent">
@@ -80,7 +80,7 @@
 
 <h3><span class="n">00.4</span>What edition 2.0 did not have</h3>
 <ul>
-  <li><strong>How Protosim terminates</strong> (PS11), that it has no <code>--help</code> or <code>--version</code> (PS12), and seven more defects around bootloaders, HEX loading, UART injection and reset (PS13 to PS19). Sections 22 and 23.</li>
+  <li><strong>How Protosim terminates</strong> (PS11), that it has no <code>--help</code> or <code>--version</code> (PS12), and eight more defects around bootloaders, HEX loading, UART input and output and reset (PS13 to PS20). Sections 22 and 23.</li>
   <li><strong>What simavr does differently from a chip</strong> (AV02 to AV11). Edition 2.0 warns that writing simulator memory directly is not a loader test. It does not say that simavr also accepts SPM from anywhere, needs no erase, has no read-while-write state and programs a page in no time, so a loader that goes through the real self-programming path can still pass in simulation and fail on a chip. Section 25.</li>
   <li><strong>Scheduler and serial-path defects in Protoduino</strong> beyond PD01 to PD04: polls starve events, <code>CC_EXTERN</code> defines variables, the serial buffers are 16 bytes on every part, the serial process strands output, and more (PD11 to PD22). Section 28.</li>
   <li><strong>A blocker for the stock Mega.</strong> <code>sys/clock.h</code> stops with <code>#error</code> for the ATmega2560, so nothing that uses a timer builds for the profile edition 2.0 starts with (PD17). The first and default profile is now the ATmega328P (13), so this blocks the second profile and not the first release.</li>
@@ -92,7 +92,7 @@
 <table>
   <thead><tr><th style="width:24%">Edition 2.0 asks for</th><th>The loader work has</th><th style="width:25%">Difference to settle</th></tr></thead>
   <tbody>
-    <tr><td>L0: whole firmware through the normal load path</td><td>A bootloader that takes the unmodified <code>.elf</code> over XMODEM-CRC, refuses a wrong file before erasing, and commits with an image record. 29 scenarios pass in simavr, on the ATmega328P, ATmega1284P and ATmega2560.</td><td>Protosim cannot drive it yet: no binary input (PS15), a reset does not return to the loader (PS18), the STK500 thread always starts (PS19).</td></tr>
+    <tr><td>L0: whole firmware through the normal load path</td><td>A bootloader that takes the unmodified <code>.elf</code> over XMODEM-CRC, refuses a wrong file before erasing, and commits with an image record. 29 scenarios pass in simavr, on the ATmega328P, ATmega1284P and ATmega2560, and 5 in Protosim itself.</td><td><span class="tag n">2.1</span> Since <code>f4d382e</code> Protosim drives it over its PTY, with resets through the pin and by power cycle. Headless binary input (PS15) and a switch for the STK500 thread (PS19) are still missing.</td></tr>
     <tr><td>L1: host-linked package for a reserved flash slot, with ABI metadata, validated and written by the device</td><td>Exactly this, with the ELF file as the package: a module is linked for a slot against one kernel build and starts with a descriptor. 12 scenarios pass on Protoduino's scheduler, also on Optiboot and, with PD17 worked around in a copy of the library, on the ATmega2560.</td><td>Edition 2.0 lists initialised data and zero-fill; the loader forbids static data in a module instead, at link time. No whole-module checksum is stored after programming.</td></tr>
     <tr><td>L2: bounded on-device relocation of <code>ET_REL</code> objects</td><td>Deliberately not done. A fix-up stream is proposed that needs no relocator on the device.</td><td>Decide whether L2 is still wanted.</td></tr>
     <tr><td>L3: lifecycle, replacement, stale references</td><td>Start, module table, restart after reset, a second module beside a running one. Removal is half built.</td><td>PD04 (stale event pointers) and PD01 apply directly to unload.</td></tr>
@@ -106,7 +106,7 @@
   <li><strong>Generation-checked process handles or purging events on teardown</strong> (PD04). Module unload reuses the RAM block of a slot, which is the exact case PD04 describes.</li>
   <li><strong>A compile-time assertion on the size of a process struct</strong> (PD09), extended to the RAM a module slot provides.</li>
   <li><strong>Honest outcomes</strong> (F08). The loader already separates &ldquo;loaded&rdquo;, &ldquo;nobody sent&rdquo; and &ldquo;refused, with a code&rdquo;; the kernel side should report through the same vocabulary of stop reasons this report defines.</li>
-  <li><strong>The evidence bundle</strong> (F13) for the loader's 41 scenarios, in place of the ad hoc result files it has now.</li>
+  <li><strong>The evidence bundle</strong> (F13) for the loader's 46 scenarios, in place of the ad hoc result files it has now.</li>
   <li><strong>A removal-safe poll sweep</strong> (PD02) before modules can be unloaded while others are polled.</li>
 </ul>
 <p>In the other direction, the loader work gives this toolbox three requirements it lacked: binary-safe file transfer to the simulated UART with a real protocol (F15), comparison of simulated flash against an independent reading of the ELF as a pass criterion (18), and a measurement of scheduler fairness, the turns a heartbeat process gets while something else runs, as a runtime metric (18).</p>
@@ -146,7 +146,7 @@
     <tr><td>Protoduino standalone</td><td><code>a3dbbf324703ebc1d26bd9d811deee56439964fc</code></td></tr>
     <tr><td>simavr used by Protosim</td><td><code>a6fc4cc754ebf4ffb1e615ba7c2ab8a6d6f8b967</code></td></tr>
     <tr><td>Protoduino submodule in Protosim</td><td><code>78d05ac0f5e8a448776e48b4bf3839b031ce13c0</code>; not audited, and not initialised in a fresh checkout</td></tr>
-    <tr><td>ELF loader work <span class="tag n">2.1</span></td><td>Protoduino branch <code>ccr-8617b1c3-gjnqlx</code>, commit <code>5a8e7da</code>: <code>docs/elf-loader-design.pdf</code>, <code>docs/elfloader/</code></td></tr>
+    <tr><td>ELF loader work <span class="tag n">2.1</span></td><td>Protoduino branch <code>ccr-8617b1c3-gjnqlx</code>, commit <code>79b68c1</code>: <code>docs/elf-loader-design.pdf</code>, <code>docs/elfloader/</code></td></tr>
   </tbody>
 </table>
 
