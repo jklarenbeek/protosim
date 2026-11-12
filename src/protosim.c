@@ -21,6 +21,7 @@
 #include "sim_gdb.h"
 #include "sim_hex.h"
 #include "avr_uart.h"
+#include "avr_eeprom.h"
 #include "sim_time.h"
 
 #ifdef _WIN32
@@ -56,6 +57,7 @@ char *opt_uart0_out = NULL;
 char *opt_exit_on_uart = NULL;
 int opt_wait_tcp = 0;
 
+const char *opt_dump_eeprom = NULL; /* <addr>:<len>, printed when the run ends */
 int opt_warp = 0;      /* a sleeping part costs no real time */
 double opt_run_ms = 0; /* stop after this much simulated time; 0: run on */
 
@@ -126,6 +128,41 @@ static void load_firmware_whole(avr_t *a, elf_firmware_t *fw) {
   if (last >= 0) a->flash[a->flashend] = (uint8_t)last;
 }
 
+/* On a chip the flag of an external or pin change interrupt is cleared by
+   writing a one to it. simavr keeps these flag registers as plain memory,
+   so that the same write sets the flag for good: firmware that polls
+   INTF0 without an interrupt handler sees an edge on every look. Where
+   the register is shared with the pin change flag, as GIFR is on the
+   ATtiny, the write is dropped and the flag cannot be cleared at all. This
+   gives the flag bits of those registers their behaviour. */
+static void interrupt_flag_write(struct avr_t *a, avr_io_addr_t addr, uint8_t v, void *param) {
+  uint8_t flags = (uint8_t)(uintptr_t)param;
+  for (int i = 0; i < a->interrupts.vector_count; i++) {
+    avr_int_vector_t *vector = a->interrupts.vector[i];
+    if (vector->raised.reg == addr && (v & (vector->raised.mask << vector->raised.bit))) avr_clear_interrupt(a, vector);
+  }
+  a->data[addr] = (uint8_t)((a->data[addr] & flags) | (v & ~flags));
+}
+
+static void fix_interrupt_flags(avr_t *a) {
+  static const avr_io_addr_t registers[] = {0x3B, 0x3C, 0x5A}; /* PCIFR, EIFR; GIFR */
+  for (unsigned r = 0; r < sizeof(registers) / sizeof(registers[0]); r++) {
+    uint8_t flags = 0;
+    for (int i = 0; i < a->interrupts.vector_count; i++) {
+      avr_int_vector_t *vector = a->interrupts.vector[i];
+      if (vector->raised.reg == registers[r]) flags |= (uint8_t)(vector->raised.mask << vector->raised.bit);
+    }
+    /* simavr's own handlers there, where it has any, clear the pin change
+       flags and nothing else. This one does that too, so it takes their
+       place: a register has room for four, and a part with three ports of
+       pin change interrupts has none left. */
+    if (flags) {
+      a->io[AVR_DATA_TO_IO(registers[r])].w.c = interrupt_flag_write;
+      a->io[AVR_DATA_TO_IO(registers[r])].w.param = (void *)(uintptr_t)flags;
+    }
+  }
+}
+
 int main(int argc, char *argv[]) {
   char *mmcu = "atmega328p";
   const char *filename = NULL;
@@ -169,6 +206,7 @@ int main(int argc, char *argv[]) {
         "  --vcc <mV>[@<ms>]      Supply voltage, as the ADC sees it\n"
         "  --warp                 A sleeping part costs no real time\n"
         "  --run-ms <ms>          Stop after this much simulated time\n"
+        "  --dump-eeprom <addr:len>       Print that part of EEPROM when the run ends\n"
         "\nLLM Debug tools:\n"
         "  -b <addr|symbol>       Breakpoint at hex addr or ELF symbol\n"
         "  -w <addr:sz:name>      Watch SRAM variable at breakpoints\n"
@@ -252,6 +290,8 @@ int main(int argc, char *argv[]) {
       opt_warp = 1;
     } else if (!strcmp(argv[i], "--run-ms")) {
       if (i + 1 < argc) opt_run_ms = strtod(argv[++i], NULL);
+    } else if (!strcmp(argv[i], "--dump-eeprom")) {
+      if (i + 1 < argc) opt_dump_eeprom = argv[++i];
     } else if (!strcmp(argv[i], "--soft-uart") || !strncmp(argv[i], "--pin-", 6) || !strcmp(argv[i], "--adc") ||
                !strcmp(argv[i], "--vcc")) {
       const char *name = argv[i];
@@ -322,6 +362,7 @@ int main(int argc, char *argv[]) {
   }
   avr_init(avr);
   avr->frequency = freq;
+  fix_interrupt_flags(avr);
 
   if (is_hex) {
     memcpy(avr->flash + hex_base, hex_data, hex_size);
@@ -583,6 +624,19 @@ int main(int argc, char *argv[]) {
     if (opt_callgraph) report_callgraph(pout, avr->cycle, freq);
 
     if (pout && pout != stdout) fclose(pout);
+  }
+
+  if (opt_dump_eeprom) {
+    unsigned at = 0, len = 16;
+    sscanf(opt_dump_eeprom, "%i:%i", (int *)&at, (int *)&len);
+    avr_eeprom_desc_t d = {.ee = NULL, .offset = (uint16_t)at, .size = len};
+    if (avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &d) >= 0 && d.ee) {
+      printf("[EEPROM] 0x%04x:", at);
+      for (unsigned i = 0; i < len; i++) printf(" %02x", d.ee[i]);
+      printf("\n");
+    } else {
+      printf("[EEPROM] cannot read %u bytes at 0x%04x\n", len, at);
+    }
   }
 
   if (asleep_cycles) {
