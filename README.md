@@ -176,7 +176,7 @@ ms; a pin is a port letter and a bit, `B3`.
 | `--pin-duty` | `<pin>[:<window>]` | Print the share of time a pin was high, per window (default 100 ms): `[DUTY] B4 37.5% at 500.000 ms`. |
 | `--adc` | `<channel\|temp>:<mV>[@<ms>]` | Voltage at an ADC input or at the temperature sensor, from the start or from a time. Repeatable. |
 | `--vcc` | `<mV>[@<ms>]` | Supply voltage, as the ADC sees it. |
-| `--warp` | | A sleeping part costs no real time: hours of a part that sleeps run in seconds. |
+| `--warp` | | A sleeping part costs no real time: hours of a part that sleeps run in seconds. Also switches off simavr's short sleep on every read of a UART status register, which makes firmware that sends with polled writes run about 80 times slower than real time. |
 | `--run-ms` | `<ms>` | Stop after this much simulated time. |
 | `--dump-eeprom` | `<addr>:<len>` | Print that part of EEPROM when the run ends. |
 

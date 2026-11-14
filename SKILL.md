@@ -88,7 +88,7 @@ For firmware that works on pins and for parts without a USART (ATtiny25/45/85). 
 - `--pin-set <pin>:<0|1>[@<ms>]`, `--pin-wave <pin>:<period>[:<from>[:<to>]]`, `--pin-pull <pin>:<0|1>`: Drive input pins; give an open-drain line its pull-up.
 - `--pin-log <pin>`: Log every change (`[PIN] B3=0 at 10016.758 ms`). `--pin-duty <pin>[:<window>]`: Log the duty cycle per window.
 - `--adc <channel|temp>:<mV>[@<ms>]`, `--vcc <mV>[@<ms>]`: Voltages at ADC inputs and the supply; repeatable to change them over time.
-- `--warp`: A sleeping part costs no real time. `--run-ms <ms>`: Stop after that much simulated time. `--dump-eeprom <addr>:<len>`: Print EEPROM at the end.
+- `--warp`: A sleeping part, or one that polls its UART, costs no real time (simavr otherwise sleeps on every UART status read: polled output runs ~80x slower than real time). `--run-ms <ms>`: Stop after that much simulated time. `--dump-eeprom <addr>:<len>`: Print EEPROM at the end.
 - At the end of a run with sleep: `[SLEEP] asleep 99.99% of 640000.000 ms, awake 42.077 ms`.
 
 Example: a watchdog chip whose heartbeat input stops after 6 s must pull its reset output about 4 s later:

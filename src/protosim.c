@@ -204,7 +204,7 @@ int main(int argc, char *argv[]) {
         "  --pin-duty <pin>[:<window>]    Print the share of time a pin is high, per window (default 100 ms)\n"
         "  --adc <ch|temp>:<mV>[@<ms>]    Voltage at an ADC input, from the start or from a time\n"
         "  --vcc <mV>[@<ms>]      Supply voltage, as the ADC sees it\n"
-        "  --warp                 A sleeping part costs no real time\n"
+        "  --warp                 A sleeping part, or one that polls its UART, costs no real time\n"
         "  --run-ms <ms>          Stop after this much simulated time\n"
         "  --dump-eeprom <addr:len>       Print that part of EEPROM when the run ends\n"
         "\nLLM Debug tools:\n"
@@ -467,6 +467,17 @@ int main(int argc, char *argv[]) {
     printf("GDB server listening on port 1234\n");
   } else if (opt_warp) {
     stimulus_warp(avr);
+    /* simavr sleeps a little each time firmware reads a UART status
+       register while nothing is pending, so that a polling loop does not
+       hog the host: firmware that sends with polled writes then runs about
+       80 times slower than real time. Under --warp nobody waits for real
+       time. */
+    for (char u = '0'; u <= '3'; u++) {
+      uint32_t flags = 0;
+      if (avr_ioctl(avr, AVR_IOCTL_UART_GET_FLAGS(u), &flags) < 0) continue;
+      flags &= ~AVR_UART_FLAG_POLL_SLEEP;
+      avr_ioctl(avr, AVR_IOCTL_UART_SET_FLAGS(u), &flags);
+    }
   }
 
   /* ── Build profiling tables ───────────────────────────────── */
