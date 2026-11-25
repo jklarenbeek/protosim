@@ -48,6 +48,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 static const char *chip = NULL; /* rp2040 | rp2350; NULL: by the file */
+static int skew[2] = {1, 1};    /* steps of core 0 and of core 1 in turn */
 static uint32_t mhz = 0;        /* 0: 125 on the RP2040, 150 on the RP2350 */
 static int is_m33 = 0;
 static int headless = 1;
@@ -74,6 +75,11 @@ static int bramble_arg(int *ip, int argc, char **argv) {
     chip = argv[++i];
     if (strcmp(chip, "rp2040") && strcmp(chip, "rp2350")) {
       fprintf(stderr, "ERROR: -m %s: Bramble runs rp2040 and rp2350 (Arm cores)\n", chip);
+      return -1;
+    }
+  } else if (!strcmp(a, "--core-skew") && i + 1 < argc) {
+    if (sscanf(argv[++i], "%d:%d", &skew[0], &skew[1]) != 2 || skew[0] < 1 || skew[1] < 1 || skew[0] > 1000 || skew[1] > 1000) {
+      fprintf(stderr, "ERROR: --core-skew %s: <steps of core 0>:<steps of core 1>, 1 to 1000\n", argv[i]);
       return -1;
     }
   } else if (!strcmp(a, "-f") && i + 1 < argc) {
@@ -330,6 +336,41 @@ static void bramble_uart_listen(int uart, void (*fn)(uint8_t byte)) {
   if (uart >= 0 && uart < 2) listeners[uart] = fn;
 }
 
+/* The receive timeout of a PL011: bytes that wait in the receive FIFO below
+   its trigger level for 32 bit times raise the RT interrupt. Bramble does
+   not have it, so that fewer bytes than the level (8 by default) were never
+   announced: a typed command did not arrive at a program that reads in its
+   interrupt handler (BR20). */
+static struct {
+  uint32_t head;
+  sim_cycles_t since;
+} rx_seen[2];
+
+static void uart_receive_timeouts(void) {
+  for (int n = 0; n < 2; n++) {
+    uart_state_t *u = &uart_state[n];
+    if (!u->rx_count) {
+      u->ris &= ~UART_INT_RT;
+      rx_seen[n].head = u->rx_head;
+      continue;
+    }
+    sim_cycles_t now = bramble_now();
+    if (u->rx_head != rx_seen[n].head) {
+      rx_seen[n].head = u->rx_head;
+      rx_seen[n].since = now;
+      continue;
+    }
+    if (u->ris & UART_INT_RT) continue;
+    /* a bit time: the divisor is IBRD + FBRD/64 of clk_peri/16 (125 MHz) */
+    uint32_t div64 = (u->ibrd << 6) | (u->fbrd & 0x3F);
+    sim_cycles_t bit = div64 ? (sim_cycles_t)div64 * 16 / 64 * bramble_hz() / 125000000u : 13020;
+    if (now - rx_seen[n].since >= 32 * bit) {
+      u->ris |= UART_INT_RT;
+      if (u->imsc & UART_INT_RT) nvic_signal_irq(n == 0 ? IRQ_UART0_IRQ : IRQ_UART1_IRQ);
+    }
+  }
+}
+
 /* bytes from the PTY wait here until UART0 can take them */
 static uint8_t pty_in[256];
 static int pty_in_len;
@@ -573,6 +614,8 @@ static void own_dual_core_step(void) {
   for (int i = 0; i < num_active_cores; i++) {
     int c = current % num_active_cores;
     current = (current + 1) % num_active_cores;
+    /* --core-skew: this core takes that many steps in a row */
+    for (int k = num_active_cores > 1 ? skew[c] : 1; k > 0; k--) {
     if (cores[c].is_wfi) {
       systick_tick_for_core(c, 1);
       if (c == CORE0 && (num_active_cores == 1 || cores[CORE1].is_wfi || cores[CORE1].is_halted)) {
@@ -605,6 +648,7 @@ static void own_dual_core_step(void) {
       cpu_step();
       cpu_unbind_core_context(c, &ctx);
     }
+    }
   }
 }
 
@@ -626,6 +670,9 @@ static sim_cycles_t quiet_cycles(void) {
     if (pio_state[b].ctrl & 0xF) return 0;
   if (rtc_state.inte || usb_state.dpram_touched || usb_state.sie_ctrl_written) return 0;
   if (pty_in_len) return 0;
+  /* bytes waiting for their receive timeout */
+  for (int n = 0; n < 2; n++)
+    if (uart_state[n].rx_count && !(uart_state[n].ris & UART_INT_RT)) return 0;
   if (membus_rp2350_mode) return 0; /* TIMER1 and the RP2350 timers: not followed yet */
 
   if (next_due != UINT64_MAX) {
@@ -713,6 +760,7 @@ static int bramble_step(long steps, sim_cycles_t *asleep) {
   *asleep = sleeping ? bramble_now() - before : 0;
 
   if ((steps & 0x3FF) == 0 && pty_uart >= 0) poll_pty();
+  if ((steps & 0x3F) == 0) uart_receive_timeouts();
   if (watched_mask) check_watches();
   run_timers();
 

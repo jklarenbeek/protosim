@@ -103,6 +103,7 @@ protosim picks the target from the file: an Arm `.elf` or a `.uf2` runs on Bramb
 - Pins are `GP0`..`GP29`; ADC inputs 0..3 are GP26..GP29, `temp` the sensor (12 bits of 3.3 V). Clock 125 MHz (RP2040), 150 MHz (RP2350).
 - AVR-only options (`--reset-*`, `--bootloader`, `--dump-eeprom`, `--soft-uart`, `--vcc`, `-d`, `-b`, `-w`, profiling) stop with `ERROR: ... is not served on bramble`.
 - Use `--warp` for anything that sleeps: without it a sleeping RP2040 runs about ten times slower than real time.
+- Both cores are stepped in turn, the same way every run; `--core-skew <n>:<m>` gives core 0 n steps, then core 1 m, to try what crosses between the cores in other orders (e.g. `3:1`, `1:13`).
 - Limits: PWM and PIO outputs are not seen on pins (only SIO); the RP2350 is experimental (UART works; timer alarms, GPIO outputs and core 1 do not yet); RISC-V images are refused.
 
 Example: an LED that blinks with `sleep_ms()`, a minute of it in a moment:

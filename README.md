@@ -471,7 +471,9 @@ tests/test_bramble.sh                                 # 25 checks
   SysTick or stimulus. `sleep_ms(500)` costs no host time; without it a
   sleeping RP2040 runs about ten times slower than real time.
 - Both cores: core 1 starts with `multicore_launch_core1()` and is stepped in
-  turn with core 0, the same way every run.
+  turn with core 0, the same way every run. `--core-skew <n>:<m>` lets core 0
+  take n steps, then core 1 m, so that what crosses between the cores is
+  tried in other orders (protoduino's multicore test runs nine).
 - A watchdog reset keeps its reason and scratch registers, as on a chip.
 
 **What protosim fixes in Bramble.** Bramble is pinned as a submodule and left
@@ -479,10 +481,11 @@ unchanged; protosim builds its sources without its `main()` and runs its own
 loop. Where Bramble differs from a chip, the backend restores the chip's
 behaviour (renaming three functions at compile time): core 1 waits for the
 launch sequence after any reset, releasing a spinlock sends no event (so
-`sleep_ms()` sleeps), a core in WFI is woken by interrupts only, the watchdog counts on the Arm cores and at the RP2040's
+`sleep_ms()` sleeps), a core in WFI is woken by interrupts only, the UART
+raises its receive timeout, the watchdog counts on the Arm cores and at the RP2040's
 rate, and on the RP2350 the Cortex-M33 obeys IT blocks, fetches code it runs
 from RAM, decodes `ldr.w pc, [pc, #-0]` (the linker's veneer) and finds the
-TIMER0 interrupt registers. Each is a finding (BR01 to BR19) in the report in
+TIMER0 interrupt registers. Each is a finding (BR01 to BR20) in the report in
 `documents/`.
 
 **The RP2350 is experimental.** The Pico SDK starts and the UART works; timer

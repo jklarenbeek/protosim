@@ -113,6 +113,7 @@ static void usage(const char *self) {
       "  -f <freq>              CPU frequency Hz (default: 16000000; on Bramble: 125 MHz, 150 MHz on the RP2350)\n"
       "  -d                     Enable GDB server on port 1234\n"
       "  -v                     Verbose simavr output\n"
+      "  --core-skew <n>:<m>    RP2040/RP2350: core 0 takes n steps, then core 1 m (default 1:1)\n"
       "  --bootloader <file>    Load a bootloader .hex (or .elf) into flash\n"
       "                         and start execution at its entry point.\n"
       "\nReset:\n"
