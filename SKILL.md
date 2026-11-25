@@ -1,6 +1,6 @@
 ---
 name: protosim_usage
-description: Instructions for LLMs on using protosim to simulate, debug, profile, and test AVR microcontroller firmware on Windows and Linux.
+description: Instructions for LLMs on using protosim to simulate, debug, profile, and test AVR, RP2040 and RP2350 firmware on Windows and Linux.
 ---
 
 # protosim Skill
@@ -94,6 +94,20 @@ For firmware that works on pins and for parts without a USART (ATtiny25/45/85). 
 Example: a watchdog chip whose heartbeat input stops after 6 s must pull its reset output about 4 s later:
 ```bash
 bin/protosim keeper.elf -m attiny85 -f 8000000 --warp --pin-pull B3:1 --pin-log B3 --vcc 5000 --pin-wave B2:200:0:6000 --run-ms 15000
+```
+
+### RP2040 and RP2350 (Bramble backend; Linux and macOS)
+protosim picks the target from the file: an Arm `.elf` or a `.uf2` runs on Bramble, an AVR `.elf` or a `.hex` on simavr (`--target avr|rp2040|rp2350` to choose).
+- Build with the Pico SDK 2.x (`arm-none-eabi-gcc`, `cmake`); `examples/rp2/build.sh` shows how. Without picotool the SDK makes `.elf` files, which run as they are.
+- Shared options work: `--uart0-in/out`, `--exit-on-uart`, the PTY at `/tmp/simavr-uart0`, `--pin-set/wave/pull/log/duty`, `--adc`, `--warp`, `--run-ms`, `--max-steps` (prints the PC of both cores), `[SLEEP]`.
+- Pins are `GP0`..`GP29`; ADC inputs 0..3 are GP26..GP29, `temp` the sensor (12 bits of 3.3 V). Clock 125 MHz (RP2040), 150 MHz (RP2350).
+- AVR-only options (`--reset-*`, `--bootloader`, `--dump-eeprom`, `--soft-uart`, `--vcc`, `-d`, `-b`, `-w`, profiling) stop with `ERROR: ... is not served on bramble`.
+- Use `--warp` for anything that sleeps: without it a sleeping RP2040 runs about ten times slower than real time.
+- Limits: PWM and PIO outputs are not seen on pins (only SIO); the RP2350 is experimental (UART works; timer alarms, GPIO outputs and core 1 do not yet); RISC-V images are refused.
+
+Example: an LED that blinks with `sleep_ms()`, a minute of it in a moment:
+```bash
+bin/protosim blink.elf --pin-duty GP25:1000 --warp --run-ms 60000 --uart0-out out.txt
 ```
 
 ## 5. Troubleshooting

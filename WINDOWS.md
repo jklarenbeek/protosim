@@ -126,6 +126,13 @@ protosim running examples\demo\demo.elf on atmega328p at 16000000 Hz
 
 ---
 
+## RP2040 and RP2350 on Windows
+
+The Windows build leaves the Bramble backend out (`BRAMBLE ?= 0` in the
+Makefile): its PTY and Bramble's own sources need POSIX. `protosim.exe` runs
+AVR firmware only; RP2040 and RP2350 firmware runs with the Linux or macOS
+build (WSL works). This has not been tried on Windows yet.
+
 ## How the Windows compatibility works
 
 simavr is written for Linux and uses several POSIX APIs that do not exist — or behave differently — on Windows. Rather than patching simavr's source, protosim injects a single compatibility header into every simavr compile unit via `gcc -include`:

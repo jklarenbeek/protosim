@@ -1,8 +1,8 @@
 # protosim 🚀
 
-**Cycle-accurate AVR firmware simulator — debug, profile, and cover your embedded code without hardware.**
+**Cycle-accurate firmware simulator for AVR, RP2040 and RP2350 — debug, profile, and cover your embedded code without hardware.**
 
-protosim runs your compiled `.elf` or `.hex` firmware inside a bit-exact AVR emulator (simavr) and exposes a virtual UART to your host. Every instruction is observed synchronously — no sampling, no approximation. Named breakpoints, variable watches, register dumps, cycle-exact profiling, call graph, and code coverage all work from a **single command line**, zero firmware modifications required.
+protosim runs your compiled `.elf` or `.hex` firmware inside a bit-exact AVR emulator (simavr) and exposes a virtual UART to your host. RP2040 and RP2350 firmware (`.elf` or `.uf2`, built with the Pico SDK or arduino-pico) runs on [Bramble](https://github.com/Night-Traders-Dev/Bramble), with the same options for UART, pins, ADC, sleep and run time: see [RP2040 and RP2350](#rp2040-and-rp2350). Every instruction is observed synchronously — no sampling, no approximation. Named breakpoints, variable watches, register dumps, cycle-exact profiling, call graph, and code coverage all work from a **single command line**, zero firmware modifications required.
 
 > **LLM quick-start:** skip to [Capability Reference](#capability-reference) — one table covers everything. Then look at [Worked Examples](#worked-examples) to see real output.
 
@@ -27,7 +27,7 @@ protosim runs your compiled `.elf` or `.hex` firmware inside a bit-exact AVR emu
 | **Linux / macOS** | `gcc`, `make`, `git`, `avr-gcc`, `avr-libc` |
 | **Windows 11** | MSYS2 UCRT64 — see [WINDOWS.md](WINDOWS.md) |
 
-Both platforms need `avr-gcc` to compile your own firmware; it is **not** needed to run pre-built `.elf`/`.hex` files.
+Both platforms need `avr-gcc` to compile your own firmware; it is **not** needed to run pre-built `.elf`/`.hex` files. For RP2040 and RP2350 firmware: `arm-none-eabi-gcc`, `cmake` and the [Pico SDK](https://github.com/raspberrypi/pico-sdk) 2.x (Linux and macOS; the Windows build leaves Bramble out).
 
 ---
 
@@ -38,11 +38,13 @@ Both platforms need `avr-gcc` to compile your own firmware; it is **not** needed
 ```bash
 git clone https://github.com/jklarenbeek/protosim.git
 cd protosim
-git submodule update --init libraries/simavr
+git submodule update --init libraries/simavr libraries/bramble
 npm install        # installs helper scripts
 npm run setup      # builds libsimavr.a
-npm run build      # compiles protosim → bin/protosim
+npm run build      # compiles protosim → bin/protosim, with Bramble when it is checked out
 ```
+
+`make BRAMBLE=0` builds without Bramble; without the submodule it is left out by itself.
 
 ### Windows
 
@@ -93,10 +95,29 @@ your firmware (.elf / .hex)
 
 ---
 
+## Targets
+
+protosim is a driver with a backend per emulator (`include/sim.h`): the driver
+reads the options all targets share, runs the loop and writes the shared
+reports; the backend runs the chip.
+
+| Target | Backend | Firmware | Chosen when |
+|--------|---------|----------|-------------|
+| AVR (ATmega328P, ATmega2560, ATtiny85, ...) | simavr | `.elf`, `.hex` | an AVR ELF file or any `.hex` (the default) |
+| RP2040, RP2350 (Arm cores) | Bramble | `.elf`, `.uf2` | an Arm ELF file or a `.uf2` |
+
+`--target avr|rp2040|rp2350` chooses by hand. The options for UART0, pins, the
+ADC, `--warp`, `--run-ms`, `--max-steps` and the `[SLEEP]` share work on both;
+the reset, bootloader, EEPROM, soft line, supply, GDB, breakpoint and profiling
+options are AVR only, and protosim stops with an error when one is given for an
+RP2040.
+
+---
+
 ## Capability Reference
 
 ```
-protosim <firmware.elf|.hex> [options]
+protosim <firmware.elf|.hex|.uf2> [options]
 ```
 
 ### Core
@@ -430,6 +451,44 @@ bin\protosim.exe examples\demo\demo.elf -t 200000 --max-steps 700000
 ```
 
 Use trace to find *when* a variable changes, then switch to `-b` breakpoints to zoom in.
+
+---
+
+## RP2040 and RP2350
+
+```bash
+PICO_SDK_PATH=~/pico-sdk examples/rp2/build.sh       # five examples, for both chips
+bin/protosim examples/rp2/out/rp2040/blink_sleep.elf --pin-log GP25 --pin-duty GP25:1000 --warp --run-ms 3000
+tests/test_bramble.sh                                 # 25 checks
+```
+
+- Pins are named `GP0` to `GP29`; `--adc 0:<mV>` to `--adc 3:<mV>` are GP26 to
+  GP29, `--adc temp:<mV>` the temperature sensor (12 bits of 3.3 V).
+- UART0 goes to `--uart0-out`, or to a pseudo terminal linked at
+  `/tmp/simavr-uart0`, as on an AVR.
+- The clock is 125 MHz on the RP2040 and 150 MHz on the RP2350 (`-f` changes it).
+- `--warp`: while every core sleeps (WFI, WFE), time jumps to the next alarm,
+  SysTick or stimulus. `sleep_ms(500)` costs no host time; without it a
+  sleeping RP2040 runs about ten times slower than real time.
+- Both cores: core 1 starts with `multicore_launch_core1()` and is stepped in
+  turn with core 0, the same way every run.
+- A watchdog reset keeps its reason and scratch registers, as on a chip.
+
+**What protosim fixes in Bramble.** Bramble is pinned as a submodule and left
+unchanged; protosim builds its sources without its `main()` and runs its own
+loop. Where Bramble differs from a chip, the backend restores the chip's
+behaviour (renaming three functions at compile time): core 1 waits for the
+launch sequence after any reset, releasing a spinlock sends no event (so
+`sleep_ms()` sleeps), the watchdog counts on the Arm cores and at the RP2040's
+rate, and on the RP2350 the Cortex-M33 obeys IT blocks, fetches code it runs
+from RAM, decodes `ldr.w pc, [pc, #-0]` (the linker's veneer) and finds the
+TIMER0 interrupt registers. Each is a finding (BR01 to BR18) in the report in
+`documents/`.
+
+**The RP2350 is experimental.** The Pico SDK starts and the UART works; timer
+alarms, GPIO outputs and core 1 do not yet (BR16). The RISC-V cores are not
+served. PWM and PIO outputs do not reach the pins in Bramble, so `--pin-log` and
+`--pin-duty` see only pins driven by SIO (BR06).
 
 ---
 

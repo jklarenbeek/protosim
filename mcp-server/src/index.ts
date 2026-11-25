@@ -77,7 +77,7 @@ const runSimulationTool: Tool = {
     properties: {
       elf_path: {
         type: "string",
-        description: "Path to the .elf file (usually in .pio/build/<env>/firmware.elf)",
+        description: "Path to the .elf file (usually in .pio/build/<env>/firmware.elf), or a .uf2 for an RP2040 or RP2350",
       },
       max_steps: {
         type: "number",
@@ -96,7 +96,7 @@ const runSimulationTool: Tool = {
       flags: {
         type: "array",
         items: { type: "string" },
-        description: "Additional protosim flags, one array entry per argument (e.g., ['--coverage', '--profile', '--callgraph', '--dump-regs']). Resets: ['--reset-at', '20:pin'] resets the part at 20 ms of simulated time with cause power, pin, brownout or watchdog; ['--reset-cause', 'pin'] sets the cause the first start reports in MCUSR; ['--reset-vector', '0x7800'] sets where a reset leads. Pins and analog inputs: ['--soft-uart', 'B0,B1,9600'] bridges a serial line on two pins for parts without a USART; ['--pin-wave', 'B2:200:0:6000'], ['--pin-set', 'B2:1@500'] and ['--pin-pull', 'B3:1'] drive pins; ['--pin-log', 'B3'] and ['--pin-duty', 'B4'] report them; ['--adc', '3:2500'] and ['--vcc', '4000@20000'] set voltages in mV; ['--warp'] makes sleep cost no real time, ['--run-ms', '30000'] stops after that simulated time, ['--dump-eeprom', '16:3'] prints EEPROM at the end.",
+        description: "Additional protosim flags, one array entry per argument (e.g., ['--coverage', '--profile', '--callgraph', '--dump-regs']). Resets: ['--reset-at', '20:pin'] resets the part at 20 ms of simulated time with cause power, pin, brownout or watchdog; ['--reset-cause', 'pin'] sets the cause the first start reports in MCUSR; ['--reset-vector', '0x7800'] sets where a reset leads. Pins and analog inputs: ['--soft-uart', 'B0,B1,9600'] bridges a serial line on two pins for parts without a USART; ['--pin-wave', 'B2:200:0:6000'], ['--pin-set', 'B2:1@500'] and ['--pin-pull', 'B3:1'] drive pins; ['--pin-log', 'B3'] and ['--pin-duty', 'B4'] report them; ['--adc', '3:2500'] and ['--vcc', '4000@20000'] set voltages in mV; ['--warp'] makes sleep cost no real time, ['--run-ms', '30000'] stops after that simulated time, ['--dump-eeprom', '16:3'] prints EEPROM at the end. RP2040 and RP2350 (an Arm .elf or a .uf2 runs on Bramble; ['--target', 'rp2040'] to choose): pins are GP0 to GP29 (['--pin-log', 'GP25']), ['--adc', '0:1650'] is GP26 and 'temp' the sensor; the reset, bootloader, EEPROM, soft line, supply, breakpoint and profiling flags are AVR only and stop the run with an error there.",
       },
     },
     required: ["elf_path", "max_steps"],
