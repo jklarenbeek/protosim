@@ -4,25 +4,19 @@
 #include <string.h>
 
 #include "stimulus.h"
-#include "reset.h"
-#include "avr_ioport.h"
-#include "avr_adc.h"
-#include "sim_time.h"
+#include "sim.h"
 
-static avr_t *avr;
+/* The outside world of the firmware, for any backend: what it needs from
+   the chip is in sim.h. */
 
-static double now_ms(void) {
-  return (double)reset_total_cycles(avr) * 1000.0 / avr->frequency;
-}
+static double now_ms(void) { return sim_now_ms(); }
 
-static avr_cycle_count_t ms_to_cycles(double ms) {
-  return (avr_cycle_count_t)(ms * avr->frequency / 1000.0);
-}
+static sim_cycles_t ms_to_cycles(double ms) { return sim_ms_to_cycles(ms); }
 
 /* in how many cycles a time of the whole simulation is due; 1 if it is past */
-static avr_cycle_count_t cycles_until(double ms) {
-  uint64_t at = (uint64_t)(ms * avr->frequency / 1000.0);
-  uint64_t now = reset_total_cycles(avr);
+static sim_cycles_t cycles_until(double ms) {
+  uint64_t at = (uint64_t)(ms * sim->hz() / 1000.0);
+  uint64_t now = sim->now();
   return at > now ? at - now : 1;
 }
 
@@ -30,27 +24,13 @@ static avr_cycle_count_t cycles_until(double ms) {
    Pins
    ═══════════════════════════════════════════════════════════════ */
 
-typedef struct {
-  char port;
-  int bit;
-} pin_t;
+static int parse_pin(const char *s, sim_pin_t *pin, const char **end) { return sim->pin(s, pin, end); }
 
-static int parse_pin(const char *s, pin_t *pin, const char **end) {
-  char port = s[0] & ~0x20; /* upper case */
-  if (port < 'A' || port > 'L' || s[1] < '0' || s[1] > '7') return -1;
-  pin->port = port;
-  pin->bit = s[1] - '0';
-  if (end) *end = s + 2;
-  return 0;
-}
-
-static avr_irq_t *pin_irq(pin_t pin) {
-  avr_irq_t *irq = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ(pin.port), pin.bit);
-  if (!irq) {
-    fprintf(stderr, "ERROR: this part has no pin %c%d\n", pin.port, pin.bit);
+static void need_pin(sim_pin_t pin) {
+  if (!sim->has_pin(pin)) {
+    fprintf(stderr, "ERROR: this part has no pin %s\n", sim->pin_name(pin));
     exit(1);
   }
-  return irq;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -64,15 +44,12 @@ static avr_irq_t *pin_irq(pin_t pin) {
    needs that time to take the byte.
    ═══════════════════════════════════════════════════════════════ */
 
-enum { SU_FROM_PART = 0, SU_TO_PART, SU_XON, SU_XOFF, SU_COUNT };
-static const char *su_names[SU_COUNT] = {"8<soft.from", "8>soft.to", ">soft.xon", ">soft.xoff"};
-
 static struct {
   int on;
-  pin_t rx, tx; /* as the part sees them */
+  sim_pin_t rx, tx; /* as the part sees them */
   uint32_t baud, gap;
-  avr_cycle_count_t bit;
-  avr_irq_t *irq, *rx_irq;
+  sim_cycles_t bit;
+  stimulus_bridge_t bridge;
   /* from the part */
   int level, busy, nbits;
   uint8_t shift;
@@ -97,70 +74,68 @@ int stimulus_soft_uart_arg(const char *arg) {
   return 0;
 }
 
-static avr_cycle_count_t su_sample(avr_t *a, avr_cycle_count_t when, void *param) {
+static void su_xon(void) {
+  if (su.bridge.xon) su.bridge.xon();
+}
+
+static sim_cycles_t su_sample(sim_cycles_t when, void *param) {
   if (su.nbits < 8) {
     su.shift = (uint8_t)((su.shift >> 1) | (su.level ? 0x80 : 0));
     su.nbits++;
     return when + su.bit;
   }
   /* the middle of the stop bit */
-  if (su.level) avr_raise_irq(su.irq + SU_FROM_PART, su.shift);
+  if (su.level && su.bridge.from_part) su.bridge.from_part(su.shift);
   su.busy = 0;
   return 0;
 }
 
-static void su_tx_changed(struct avr_irq_t *irq, uint32_t value, void *param) {
-  su.level = value != 0;
+static void su_tx_changed(void *param, int level) {
+  su.level = level;
   if (!su.level && !su.busy) {
     su.busy = 1;
     su.nbits = 0;
-    avr_cycle_timer_register(avr, su.bit + su.bit / 2, su_sample, NULL);
+    sim->timer(su.bit + su.bit / 2, su_sample, NULL);
   }
 }
 
-static avr_cycle_count_t su_drive(avr_t *a, avr_cycle_count_t when, void *param) {
+static sim_cycles_t su_drive(sim_cycles_t when, void *param) {
   if (su.left > 0) {
-    avr_raise_irq(su.rx_irq, su.frame & 1);
+    sim->drive(su.rx, su.frame & 1);
     su.frame >>= 1;
     su.left--;
     return when + (su.left ? su.bit : su.bit * (1 + su.gap));
   }
-  avr_raise_irq(su.irq + SU_XON, 1); /* the line is free again */
+  su_xon(); /* the line is free again */
   return 0;
 }
 
-static void su_byte_for_part(struct avr_irq_t *irq, uint32_t value, void *param) {
-  avr_raise_irq(su.irq + SU_XOFF, 1); /* one byte at a time */
-  su.frame = (uint16_t)(((value & 0xFF) << 1) | 0x200); /* start, 8 data, stop */
+void stimulus_soft_uart_put(uint8_t byte) {
+  if (su.bridge.xoff) su.bridge.xoff(); /* one byte at a time */
+  su.frame = (uint16_t)((byte << 1) | 0x200); /* start, 8 data, stop */
   su.left = 10;
-  avr_cycle_timer_register(avr, 1, su_drive, NULL);
+  sim->timer(1, su_drive, NULL);
 }
 
-static void su_after_reset(avr_t *a) {
+void stimulus_soft_uart_bridge(const stimulus_bridge_t *bridge) { su.bridge = *bridge; }
+
+static void su_after_reset(void) {
   su.busy = 0;
   su.left = 0;
-  avr_raise_irq(su.rx_irq, 1);
-  avr_raise_irq(su.irq + SU_XON, 1);
+  sim->drive(su.rx, 1);
+  su_xon();
 }
 
 static void su_setup(void) {
-  su.bit = avr->frequency / su.baud;
-  su.irq = avr_alloc_irq(&avr->irq_pool, 0, SU_COUNT, su_names);
-  su.rx_irq = pin_irq(su.rx);
+  su.bit = sim->hz() / su.baud;
+  need_pin(su.rx);
+  need_pin(su.tx);
   su.level = 1;
-  avr_irq_register_notify(pin_irq(su.tx), su_tx_changed, NULL);
-  avr_irq_register_notify(su.irq + SU_TO_PART, su_byte_for_part, NULL);
-  avr_raise_irq(su.rx_irq, 1); /* the line idles high */
-  reset_add_hook(su_after_reset);
-  printf("[PIN] serial line on two pins: the part receives on %c%d and sends on %c%d, %u baud\n",
-         su.rx.port, su.rx.bit, su.tx.port, su.tx.bit, su.baud);
-}
-
-void stimulus_soft_uart_irqs(avr_irq_t **from_part, avr_irq_t **to_part, avr_irq_t **xon, avr_irq_t **xoff) {
-  *from_part = su.irq + SU_FROM_PART;
-  *to_part = su.irq + SU_TO_PART;
-  *xon = su.irq + SU_XON;
-  *xoff = su.irq + SU_XOFF;
+  sim->watch(su.tx, su_tx_changed, NULL);
+  sim->drive(su.rx, 1); /* the line idles high */
+  sim->on_reset(su_after_reset);
+  printf("[PIN] serial line on two pins: the part receives on %s", sim->pin_name(su.rx));
+  printf(" and sends on %s, %u baud\n", sim->pin_name(su.tx), su.baud);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -168,17 +143,16 @@ void stimulus_soft_uart_irqs(avr_irq_t **from_part, avr_irq_t **to_part, avr_irq
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct {
-  pin_t pin;
+  sim_pin_t pin;
   double at_ms, period_ms, to_ms; /* period 0: one level */
   int level;
-  avr_irq_t *irq;
 } drive_t;
 
 static drive_t drives[STIMULUS_MAX];
 static int n_drives;
 
 static struct {
-  pin_t pin;
+  sim_pin_t pin;
   int level;
 } pulls[STIMULUS_MAX];
 static int n_pulls;
@@ -215,10 +189,10 @@ int stimulus_pin_pull_arg(const char *arg) {
   return 0;
 }
 
-static avr_cycle_count_t drive_timer(avr_t *a, avr_cycle_count_t when, void *param) {
+static sim_cycles_t drive_timer(sim_cycles_t when, void *param) {
   drive_t *d = param;
   if (d->period_ms > 0 && d->to_ms >= 0 && now_ms() >= d->to_ms) return 0; /* the wave ends where it is */
-  avr_raise_irq(d->irq, d->level);
+  sim->drive(d->pin, d->level);
   if (d->period_ms <= 0) return 0;
   d->level = !d->level;
   return when + ms_to_cycles(d->period_ms / 2);
@@ -229,7 +203,7 @@ static avr_cycle_count_t drive_timer(avr_t *a, avr_cycle_count_t when, void *par
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct {
-  pin_t pin;
+  sim_pin_t pin;
   double window_ms; /* 0: log every change */
   int level;
   uint64_t since, high; /* cycles */
@@ -256,27 +230,26 @@ int stimulus_pin_duty_arg(const char *arg) {
   return 0;
 }
 
-static void watch_changed(struct avr_irq_t *irq, uint32_t value, void *param) {
+static void watch_changed(void *param, int level) {
   watch_t *w = param;
-  int level = value != 0;
-  uint64_t now = reset_total_cycles(avr);
+  uint64_t now = sim->now();
   if (level == w->level) return;
   if (w->window_ms > 0) {
     if (w->level == 1) w->high += now - w->since;
     w->since = now;
   } else {
-    printf("[PIN] %c%d=%d at %.3f ms\n", w->pin.port, w->pin.bit, level, now_ms());
+    printf("[PIN] %s=%d at %.3f ms\n", sim->pin_name(w->pin), level, now_ms());
   }
   w->level = level;
 }
 
-static avr_cycle_count_t duty_timer(avr_t *a, avr_cycle_count_t when, void *param) {
+static sim_cycles_t duty_timer(sim_cycles_t when, void *param) {
   watch_t *w = param;
-  uint64_t now = reset_total_cycles(avr);
+  uint64_t now = sim->now();
   uint64_t window = ms_to_cycles(w->window_ms);
   if (w->level == 1) w->high += now - w->since;
   w->since = now;
-  printf("[DUTY] %c%d %.1f%% at %.3f ms\n", w->pin.port, w->pin.bit, 100.0 * (double)w->high / (double)window, now_ms());
+  printf("[DUTY] %s %.1f%% at %.3f ms\n", sim->pin_name(w->pin), 100.0 * (double)w->high / (double)window, now_ms());
   w->high = 0;
   return when + window;
 }
@@ -286,7 +259,7 @@ static avr_cycle_count_t duty_timer(avr_t *a, avr_cycle_count_t when, void *para
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct {
-  int channel; /* 0..15, ADC_IRQ_TEMP, or -1 for the supply */
+  int channel; /* 0..15, SIM_ANALOG_TEMP, or SIM_ANALOG_SUPPLY */
   uint32_t mv;
   double at_ms;
 } volt_t;
@@ -309,7 +282,7 @@ int stimulus_adc_arg(const char *arg) {
   int channel;
   if (!p) return -1;
   if (!strncmp(arg, "temp", 4) && arg + 4 == p) {
-    channel = ADC_IRQ_TEMP;
+    channel = SIM_ANALOG_TEMP;
   } else {
     channel = (int)strtol(arg, NULL, 10);
     if (arg[0] < '0' || arg[0] > '9' || channel > 15) return -1;
@@ -317,17 +290,12 @@ int stimulus_adc_arg(const char *arg) {
   return volt_arg(p + 1, channel);
 }
 
-int stimulus_vcc_arg(const char *arg) { return volt_arg(arg, -1); }
+int stimulus_vcc_arg(const char *arg) { return volt_arg(arg, SIM_ANALOG_SUPPLY); }
 
-static avr_cycle_count_t volt_timer(avr_t *a, avr_cycle_count_t when, void *param) {
+static sim_cycles_t volt_timer(sim_cycles_t when, void *param) {
   volt_t *v = param;
-  if (v->channel < 0) {
-    avr->vcc = avr->avcc = v->mv;
-    printf("[ADC] supply %u mV at %.3f ms\n", v->mv, now_ms());
-  } else {
-    avr_irq_t *irq = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, v->channel);
-    if (irq) avr_raise_irq(irq, v->mv);
-  }
+  sim->analog(v->channel, v->mv);
+  if (v->channel == SIM_ANALOG_SUPPLY) printf("[ADC] supply %u mV at %.3f ms\n", v->mv, now_ms());
   return 0;
 }
 
@@ -335,44 +303,38 @@ static avr_cycle_count_t volt_timer(avr_t *a, avr_cycle_count_t when, void *para
    Setup
    ═══════════════════════════════════════════════════════════════ */
 
-/* simavr drops every pending cycle timer at a reset: what is still to come
-   is registered again, each at its own time of the whole simulation */
-static void arm(avr_t *a) {
+/* What is still to come is registered again after a reset, each at its own
+   time of the whole simulation (simavr drops every pending cycle timer at a
+   reset). */
+static void arm(int after_reset) {
   for (int i = 0; i < n_drives; i++) {
     drive_t *d = &drives[i];
-    if (d->period_ms <= 0 && now_ms() > d->at_ms && a) continue; /* a level that was set stays set */
-    avr_cycle_timer_register(avr, cycles_until(d->at_ms), drive_timer, d);
+    if (d->period_ms <= 0 && now_ms() > d->at_ms && after_reset) continue; /* a level that was set stays set */
+    sim->timer(cycles_until(d->at_ms), drive_timer, d);
   }
   for (int i = 0; i < n_watches; i++)
-    if (watches[i].window_ms > 0)
-      avr_cycle_timer_register(avr, ms_to_cycles(watches[i].window_ms), duty_timer, &watches[i]);
+    if (watches[i].window_ms > 0) sim->timer(ms_to_cycles(watches[i].window_ms), duty_timer, &watches[i]);
   for (int i = 0; i < n_volts; i++)
-    if (!a || now_ms() <= volts[i].at_ms) avr_cycle_timer_register(avr, cycles_until(volts[i].at_ms), volt_timer, &volts[i]);
+    if (!after_reset || now_ms() <= volts[i].at_ms) sim->timer(cycles_until(volts[i].at_ms), volt_timer, &volts[i]);
 }
 
-void stimulus_setup(avr_t *a) {
-  avr = a;
+static void arm_after_reset(void) { arm(1); }
 
+void stimulus_setup(void) {
   for (int i = 0; i < n_pulls; i++) {
-    avr_ioport_external_t pull = {.name = pulls[i].pin.port, .mask = (uint8_t)(1 << pulls[i].pin.bit),
-                                  .value = (uint8_t)(pulls[i].level << pulls[i].pin.bit)};
-    avr_ioctl(avr, AVR_IOCTL_IOPORT_SET_EXTERNAL(pulls[i].pin.port), &pull);
+    need_pin(pulls[i].pin);
+    sim->pull(pulls[i].pin, pulls[i].level);
   }
-  for (int i = 0; i < n_drives; i++) drives[i].irq = pin_irq(drives[i].pin);
-  for (int i = 0; i < n_watches; i++) avr_irq_register_notify(pin_irq(watches[i].pin), watch_changed, &watches[i]);
+  for (int i = 0; i < n_drives; i++) need_pin(drives[i].pin);
+  for (int i = 0; i < n_watches; i++) {
+    need_pin(watches[i].pin);
+    sim->watch(watches[i].pin, watch_changed, &watches[i]);
+  }
   /* voltages given without a time are there before the first instruction */
   for (int i = 0; i < n_volts; i++)
-    if (volts[i].at_ms <= 0 && volts[i].channel < 0) avr->vcc = avr->avcc = volts[i].mv;
+    if (volts[i].at_ms <= 0 && volts[i].channel == SIM_ANALOG_SUPPLY) sim->analog(SIM_ANALOG_SUPPLY, volts[i].mv);
 
   if (su.on) su_setup();
-  arm(NULL);
-  if (n_drives || n_watches || n_volts) reset_add_hook(arm);
+  arm(0);
+  if (n_drives || n_watches || n_volts) sim->on_reset(arm_after_reset);
 }
-
-/* ═══════════════════════════════════════════════════════════════
-   Sleep
-   ═══════════════════════════════════════════════════════════════ */
-
-static void sleep_at_once(avr_t *a, avr_cycle_count_t how_long) {}
-
-void stimulus_warp(avr_t *a) { a->sleep = sleep_at_once; }

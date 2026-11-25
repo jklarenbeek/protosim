@@ -1,63 +1,36 @@
 /*
     protosim.c
-    A simavr runner for Protoduino with PTY UART support.
+    Runs firmware for Protoduino on an emulator, with a PTY or files for
+    its UART: simavr for AVR parts, Bramble for the RP2040 and RP2350.
+    This file is the driver: the options all targets share, the loop and
+    the shared reports. What a target needs is in sim.h.
  */
 
 #ifdef _WIN32
 #define PROTOSIM_BUILD 1
 #endif
 
-#include <pthread.h>
 #include <stdint.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <inttypes.h>
 
-#include "sim_avr.h"
-#include "sim_elf.h"
-#include "sim_gdb.h"
-#include "sim_hex.h"
-#include "avr_uart.h"
-#include "avr_eeprom.h"
-#include "sim_time.h"
-
-#ifdef _WIN32
-#include "uart_com.h"
-#else
-#include "uart_pty.h"
-#endif
-
-#include "stk500_uploader.h"
-#include "protosim_core.h"
-#include "debug.h"
-#include "profiling.h"
-#include "ihex_loader.h"
-#include "reset.h"
+#include "sim.h"
 #include "stimulus.h"
 
 /* ═══════════════════════════════════════════════════════════════
-   Globals (Definitions)
+   Shared options
    ═══════════════════════════════════════════════════════════════ */
 
-avr_t *avr = NULL;
+const sim_backend_t *sim = NULL;
+
 int verbose = 0;
-int opt_dump_regs = 0;
-int opt_single_step = 0;
 long opt_max_steps = 0;
-long opt_trace_every = 0;
-
-int opt_reset_cause = RESET_POWER_ON; /* what the first start reports */
-long opt_reset_vector = -1;           /* where a reset leads; -1: address 0, or the bootloader */
-
 char *opt_uart0_in = NULL;
 char *opt_uart0_out = NULL;
 char *opt_exit_on_uart = NULL;
 int opt_wait_tcp = 0;
-
-const char *opt_dump_eeprom = NULL; /* <addr>:<len>, printed when the run ends */
 int opt_warp = 0;      /* a sleeping part costs no real time */
 double opt_run_ms = 0; /* stop after this much simulated time; 0: run on */
 
@@ -65,17 +38,17 @@ double opt_run_ms = 0; /* stop after this much simulated time; 0: run on */
 static volatile sig_atomic_t stop_requested = 0;
 static void on_stop_signal(int sig) { stop_requested = 1; }
 
-int force_exit_success = 0;
-FILE *uart0_out_file = NULL;
-char exit_uart_buf[512] = {0};
-int exit_uart_len = 0;
+static int force_exit_success = 0;
+static FILE *uart0_out_file = NULL;
+static char exit_uart_buf[512] = {0};
+static int exit_uart_len = 0;
 
-static void uart0_out_hook(struct avr_irq_t *irq, uint32_t value, void *param) {
+static void uart0_out_hook(uint8_t value) {
   if (uart0_out_file) {
     fputc(value, uart0_out_file);
   }
   if (opt_exit_on_uart) {
-    if (exit_uart_len < sizeof(exit_uart_buf) - 1) {
+    if (exit_uart_len < (int)sizeof(exit_uart_buf) - 1) {
       exit_uart_buf[exit_uart_len++] = (char)value;
       exit_uart_buf[exit_uart_len] = '\0';
     } else {
@@ -88,184 +61,138 @@ static void uart0_out_hook(struct avr_irq_t *irq, uint32_t value, void *param) {
   }
 }
 
-static avr_cycle_count_t uart0_in_timer(struct avr_t *avr, avr_cycle_count_t when, void *param) {
+/* one byte a millisecond, about 9600 baud; a byte the chip has no room for
+   is offered again a millisecond later */
+static sim_cycles_t uart0_in_timer(sim_cycles_t when, void *param) {
   static int injected_idx = 0;
   if (!opt_uart0_in || opt_uart0_in[injected_idx] == '\0') return 0;
-  
-  avr_irq_t *rx_irq = avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ('0'), UART_IRQ_INPUT);
-  if (rx_irq) {
-    avr_raise_irq(rx_irq, opt_uart0_in[injected_idx++]);
-  }
-  return when + avr_hz_to_cycles(avr, 1000); // 1ms approx for 9600 baud
+  if (sim->uart_send(0, (uint8_t)opt_uart0_in[injected_idx])) injected_idx++;
+  return when + sim->hz() / 1000;
 }
 
-/* simavr drops every cycle timer at a reset; the injection goes on after it. */
-static void uart0_in_rearm(struct avr_t *avr) {
-  if (opt_uart0_in)
-    avr_cycle_timer_register(avr, avr_hz_to_cycles(avr, 1000), uart0_in_timer, NULL);
+/* a reset drops every pending timer on some targets; the injection goes on after it */
+static void uart0_in_rearm(void) {
+  if (opt_uart0_in) sim->timer(sim->hz() / 1000, uart0_in_timer, NULL);
 }
-
-#ifdef _WIN32
-uart_com_t uart_com;
-#else
-uart_pty_t uart_pty;
-#endif
 
 /* ═══════════════════════════════════════════════════════════════
-   main
+   Choosing the target
    ═══════════════════════════════════════════════════════════════ */
 
-/* simavr's ELF loader takes the last flash address as its limit, so a file
-   that fills flash to its last byte arrives one byte short ("would overflow
-   buffer"). A bootloader keeps its version or a service table there. The
-   loader frees the chunks, so the byte is picked up before it runs. */
-static void load_firmware_whole(avr_t *a, elf_firmware_t *fw) {
-  int last = -1;
-  for (fw_chunk_t *c = fw->chunks; c; c = c->next)
-    if (c->addr < AVR_SEGMENT_OFFSET_DATA && c->size && c->addr + c->size == a->flashend + 1)
-      last = c->data[c->size - 1];
-  avr_load_firmware(a, fw);
-  if (last >= 0) a->flash[a->flashend] = (uint8_t)last;
+static const sim_backend_t *const backends[] = {
+    &sim_backend_avr,
+#ifdef PROTOSIM_BRAMBLE
+    &sim_backend_bramble,
+#endif
+};
+#define N_BACKENDS (sizeof(backends) / sizeof(backends[0]))
+
+/* --target names a backend, or a chip family it runs */
+static const sim_backend_t *backend_named(const char *name) {
+  if (!strcmp(name, "avr") || !strcmp(name, "simavr")) return &sim_backend_avr;
+#ifdef PROTOSIM_BRAMBLE
+  if (!strcmp(name, "bramble") || !strncmp(name, "rp2040", 6) || !strncmp(name, "rp2350", 6)) return &sim_backend_bramble;
+#endif
+  return NULL;
 }
 
-/* On a chip the flag of an external or pin change interrupt is cleared by
-   writing a one to it. simavr keeps these flag registers as plain memory,
-   so that the same write sets the flag for good: firmware that polls
-   INTF0 without an interrupt handler sees an edge on every look. Where
-   the register is shared with the pin change flag, as GIFR is on the
-   ATtiny, the write is dropped and the flag cannot be cleared at all. This
-   gives the flag bits of those registers their behaviour. */
-static void interrupt_flag_write(struct avr_t *a, avr_io_addr_t addr, uint8_t v, void *param) {
-  uint8_t flags = (uint8_t)(uintptr_t)param;
-  for (int i = 0; i < a->interrupts.vector_count; i++) {
-    avr_int_vector_t *vector = a->interrupts.vector[i];
-    if (vector->raised.reg == addr && (v & (vector->raised.mask << vector->raised.bit))) avr_clear_interrupt(a, vector);
-  }
-  a->data[addr] = (uint8_t)((a->data[addr] & flags) | (v & ~flags));
+static void usage(const char *self) {
+  fprintf(stderr,
+          "Usage: %s <firmware.elf|hex|uf2> [options]\n"
+          "\nTargets (chosen by the file; --target to choose yourself):\n",
+          self);
+  for (unsigned i = 0; i < N_BACKENDS; i++) fprintf(stderr, "  %-22s %s\n", backends[i]->name, backends[i]->chips);
+#ifndef PROTOSIM_BRAMBLE
+  fprintf(stderr, "  %-22s RP2040 and RP2350: not in this build (make BRAMBLE=1)\n", "bramble");
+#endif
+  fprintf(
+      stderr,
+      "  --target <name>        avr | rp2040 | rp2350 (or the backend: simavr | bramble)\n"
+      "\nCore options:\n"
+      "  -m <mcu>               MCU type (default: atmega328p; on Bramble: rp2040 or rp2350, by the file)\n"
+      "  -f <freq>              CPU frequency Hz (default: 16000000; on Bramble: 125 MHz, 150 MHz on the RP2350)\n"
+      "  -d                     Enable GDB server on port 1234\n"
+      "  -v                     Verbose simavr output\n"
+      "  --bootloader <file>    Load a bootloader .hex (or .elf) into flash\n"
+      "                         and start execution at its entry point.\n"
+      "\nReset:\n"
+      "  --reset-cause <cause>  Cause the first start reports in MCUSR (default: power)\n"
+      "  --reset-at <ms>[:cause] Reset at that simulated time; repeatable (default cause: pin)\n"
+      "                         cause: power | pin | brownout | watchdog\n"
+      "  --reset-vector <addr>  Where a reset leads, e.g. 0x7800 for a boot section\n"
+      "                         (default: 0, or the entry of --bootloader)\n"
+      "  SIGUSR1 / SIGUSR2      Pull the reset pin / cycle the power of a running simulation\n"
+      "\nPins and analog inputs (times are simulated ms; a pin is a port and a bit, B3, or GP25):\n"
+      "  --soft-uart <rx>,<tx>[,<baud>[,<gap>]]\n"
+      "                         A serial line on two pins, on the PTY in place of UART0, for parts\n"
+      "                         without a USART: B0,B1,9600. <rx> is where the part receives.\n"
+      "                         <gap>: idle bit times between two bytes to the part (default 20)\n"
+      "  --pin-set <pin>:<0|1>[@<ms>]   Level of an input pin, from the start or from a time\n"
+      "  --pin-wave <pin>:<period>[:<from>[:<to>]]\n"
+      "                         Square wave into a pin, e.g. a heartbeat: B2:100:0:5000\n"
+      "  --pin-pull <pin>:<0|1> External pull on a pin: what an open-drain output reads when released\n"
+      "  --pin-log <pin>        Print every change of a pin\n"
+      "  --pin-duty <pin>[:<window>]    Print the share of time a pin is high, per window (default 100 ms)\n"
+      "  --adc <ch|temp>:<mV>[@<ms>]    Voltage at an ADC input, from the start or from a time\n"
+      "  --vcc <mV>[@<ms>]      Supply voltage, as the ADC sees it\n"
+      "  --warp                 A sleeping part, or one that polls its UART, costs no real time\n"
+      "  --run-ms <ms>          Stop after this much simulated time\n"
+      "  --dump-eeprom <addr:len>       Print that part of EEPROM when the run ends\n"
+      "\nLLM Debug tools:\n"
+      "  -b <addr|symbol>       Breakpoint at hex addr or ELF symbol\n"
+      "  -w <addr:sz:name>      Watch SRAM variable at breakpoints\n"
+      "  --dump-regs            Dump all 32 CPU registers at each breakpoint\n"
+      "  --dump-sram <addr:len> Hex+ASCII SRAM dump at each breakpoint\n"
+      "  --max-steps <n>        Exit after N steps (prevents hangs)\n"
+      "  -t <n>                 Trace: print PC + watches every N cycles\n"
+      "  -s                     Single-step: print PC for every instruction\n"
+      "\nLLM Testing & CI tools:\n"
+      "  --uart0-in <string>    Inject literal string to UART0 RX\n"
+      "  --uart0-out <file>     Capture UART0 TX to file (bypasses TCP)\n"
+      "  --exit-on-uart <str>   Exit successfully when exact string is printed\n"
+      "  --wait-tcp             Wait for TCP client before starting simulation\n"
+      "\nLLM Profiling tools (ELF only):\n"
+      "  --coverage             Per-function code coverage report\n"
+      "  --profile              Cycle-exact flat performance profile\n"
+      "  --callgraph            Call graph with per-edge cycle costs\n"
+      "  --profile-out <file>   Write profiling reports to file\n"
+      "\nOn the RP2040 and RP2350 the reset, bootloader, EEPROM, soft line, supply, profiling\n"
+      "and breakpoint options are not served; protosim says so and stops.\n");
 }
 
-static void fix_interrupt_flags(avr_t *a) {
-  static const avr_io_addr_t registers[] = {0x3B, 0x3C, 0x5A}; /* PCIFR, EIFR; GIFR */
-  for (unsigned r = 0; r < sizeof(registers) / sizeof(registers[0]); r++) {
-    uint8_t flags = 0;
-    for (int i = 0; i < a->interrupts.vector_count; i++) {
-      avr_int_vector_t *vector = a->interrupts.vector[i];
-      if (vector->raised.reg == registers[r]) flags |= (uint8_t)(vector->raised.mask << vector->raised.bit);
+static const sim_backend_t *choose_backend(int argc, char *argv[]) {
+  for (int i = 2; i + 1 < argc; i++) {
+    if (!strcmp(argv[i], "--target")) {
+      const sim_backend_t *b = backend_named(argv[i + 1]);
+      if (!b) {
+        fprintf(stderr, "ERROR: --target %s: no such target in this build\n", argv[i + 1]);
+        exit(1);
+      }
+      return b;
     }
-    /* simavr's own handlers there, where it has any, clear the pin change
-       flags and nothing else. This one does that too, so it takes their
-       place: a register has room for four, and a part with three ports of
-       pin change interrupts has none left. */
-    if (flags) {
-      a->io[AVR_DATA_TO_IO(registers[r])].w.c = interrupt_flag_write;
-      a->io[AVR_DATA_TO_IO(registers[r])].w.param = (void *)(uintptr_t)flags;
-    }
   }
+  for (unsigned i = 0; i < N_BACKENDS; i++)
+    if (backends[i]->probe(argv[1])) return backends[i];
+  /* what it was before targets: an AVR */
+  return &sim_backend_avr;
 }
 
-int main(int argc, char *argv[]) {
-  char *mmcu = "atmega328p";
-  const char *filename = NULL;
-  uint32_t freq = 16000000;
-  int debug_gdb = 0;
-  const char *opt_bootloader = NULL;
-
-  setbuf(stdout, NULL);
-  setbuf(stderr, NULL);
-
-  if (argc < 2) {
-    fprintf(
-        stderr,
-        "Usage: %s <firmware.elf|hex> [options]\n"
-        "\nCore options:\n"
-        "  -m <mcu>               MCU type (default: atmega328p)\n"
-        "  -f <freq>              CPU frequency Hz (default: 16000000)\n"
-        "  -d                     Enable GDB server on port 1234\n"
-        "  -v                     Verbose simavr output\n"
-        "  --bootloader <file>    Load a bootloader .hex (or .elf) into flash\n"
-        "                         and start execution at its entry point.\n"
-        "\nReset:\n"
-        "  --reset-cause <cause>  Cause the first start reports in MCUSR (default: power)\n"
-        "  --reset-at <ms>[:cause] Reset at that simulated time; repeatable (default cause: pin)\n"
-        "                         cause: power | pin | brownout | watchdog\n"
-        "  --reset-vector <addr>  Where a reset leads, e.g. 0x7800 for a boot section\n"
-        "                         (default: 0, or the entry of --bootloader)\n"
-        "  SIGUSR1 / SIGUSR2      Pull the reset pin / cycle the power of a running simulation\n"
-        "\nPins and analog inputs (times are simulated ms; a pin is a port and a bit, B3):\n"
-        "  --soft-uart <rx>,<tx>[,<baud>[,<gap>]]\n"
-        "                         A serial line on two pins, on the PTY in place of UART0, for parts\n"
-        "                         without a USART: B0,B1,9600. <rx> is where the part receives.\n"
-        "                         <gap>: idle bit times between two bytes to the part (default 20)\n"
-        "  --pin-set <pin>:<0|1>[@<ms>]   Level of an input pin, from the start or from a time\n"
-        "  --pin-wave <pin>:<period>[:<from>[:<to>]]\n"
-        "                         Square wave into a pin, e.g. a heartbeat: B2:100:0:5000\n"
-        "  --pin-pull <pin>:<0|1> External pull on a pin: what an open-drain output reads when released\n"
-        "  --pin-log <pin>        Print every change of a pin\n"
-        "  --pin-duty <pin>[:<window>]    Print the share of time a pin is high, per window (default 100 ms)\n"
-        "  --adc <ch|temp>:<mV>[@<ms>]    Voltage at an ADC input, from the start or from a time\n"
-        "  --vcc <mV>[@<ms>]      Supply voltage, as the ADC sees it\n"
-        "  --warp                 A sleeping part, or one that polls its UART, costs no real time\n"
-        "  --run-ms <ms>          Stop after this much simulated time\n"
-        "  --dump-eeprom <addr:len>       Print that part of EEPROM when the run ends\n"
-        "\nLLM Debug tools:\n"
-        "  -b <addr|symbol>       Breakpoint at hex addr or ELF symbol\n"
-        "  -w <addr:sz:name>      Watch SRAM variable at breakpoints\n"
-        "  --dump-regs            Dump all 32 CPU registers at each breakpoint\n"
-        "  --dump-sram <addr:len> Hex+ASCII SRAM dump at each breakpoint\n"
-        "  --max-steps <n>        Exit after N steps (prevents hangs)\n"
-        "  -t <n>                 Trace: print PC + watches every N cycles\n"
-        "  -s                     Single-step: print PC for every instruction\n"
-        "\nLLM Testing & CI tools:\n"
-        "  --uart0-in <string>    Inject literal string to UART0 RX\n"
-        "  --uart0-out <file>     Capture UART0 TX to file (bypasses TCP)\n"
-        "  --exit-on-uart <str>   Exit successfully when exact string is printed\n"
-        "  --wait-tcp             Wait for TCP client before starting simulation\n"
-        "\nLLM Profiling tools (ELF only):\n"
-        "  --coverage             Per-function code coverage report\n"
-        "  --profile              Cycle-exact flat performance profile\n"
-        "  --callgraph            Call graph with per-edge cycle costs\n"
-        "  --profile-out <file>   Write profiling reports to file\n",
-        argv[0]);
+/* a shared option the target does not serve ends the run before it starts */
+static void need_support(const char *option) {
+  if (!sim->supports(option)) {
+    fprintf(stderr, "ERROR: %s is not served on %s\n", option, sim->name);
     exit(1);
   }
+}
 
-  filename = argv[1];
-
+static void parse_options(int argc, char *argv[]) {
   for (int i = 2; i < argc; i++) {
-    if (!strcmp(argv[i], "-m")) {
-      if (i + 1 < argc) mmcu = argv[++i];
-    } else if (!strcmp(argv[i], "-f")) {
-      if (i + 1 < argc) freq = (uint32_t)atoi(argv[++i]);
-    } else if (!strcmp(argv[i], "-d")) {
-      debug_gdb++;
+    if (!strcmp(argv[i], "--target")) {
+      i++;
     } else if (!strcmp(argv[i], "-v")) {
       verbose++;
-    } else if (!strcmp(argv[i], "-b")) {
-      if (i + 1 < argc) add_breakpoint_arg(argv[++i]);
-    } else if (!strcmp(argv[i], "-w")) {
-      if (i + 1 < argc) add_watch_arg(argv[++i]);
-    } else if (!strcmp(argv[i], "--dump-regs")) {
-      opt_dump_regs = 1;
-    } else if (!strcmp(argv[i], "--dump-sram")) {
-      if (i + 1 < argc) add_sram_dump_arg(argv[++i]);
     } else if (!strcmp(argv[i], "--max-steps")) {
       if (i + 1 < argc) opt_max_steps = atol(argv[++i]);
-    } else if (!strcmp(argv[i], "-t")) {
-      if (i + 1 < argc) opt_trace_every = atol(argv[++i]);
-    } else if (!strcmp(argv[i], "-s")) {
-      opt_single_step = 1;
-    } else if (!strcmp(argv[i], "--coverage")) {
-      opt_coverage = 1;
-    } else if (!strcmp(argv[i], "--profile")) {
-      opt_profile = 1;
-      opt_callgraph = 1;
-    } else if (!strcmp(argv[i], "--callgraph")) {
-      opt_callgraph = 1;
-      opt_profile = 1;
-    } else if (!strcmp(argv[i], "--profile-out")) {
-      if (i + 1 < argc) opt_profile_out = argv[++i];
-    } else if (!strcmp(argv[i], "--bootloader")) {
-      if (i + 1 < argc) opt_bootloader = argv[++i];
     } else if (!strcmp(argv[i], "--uart0-in")) {
       if (i + 1 < argc) opt_uart0_in = argv[++i];
     } else if (!strcmp(argv[i], "--uart0-out")) {
@@ -273,29 +200,17 @@ int main(int argc, char *argv[]) {
     } else if (!strcmp(argv[i], "--exit-on-uart")) {
       if (i + 1 < argc) opt_exit_on_uart = argv[++i];
     } else if (!strcmp(argv[i], "--wait-tcp")) {
+      need_support(argv[i]);
       opt_wait_tcp = 1;
-    } else if (!strcmp(argv[i], "--reset-cause")) {
-      if (i + 1 < argc && (opt_reset_cause = reset_cause_from_name(argv[++i])) < 0) {
-        fprintf(stderr, "ERROR: --reset-cause %s: use power, pin, brownout or watchdog\n", argv[i]);
-        exit(1);
-      }
-    } else if (!strcmp(argv[i], "--reset-at")) {
-      if (i + 1 < argc && add_reset_arg(argv[++i]) < 0) {
-        fprintf(stderr, "ERROR: --reset-at %s: use <ms> or <ms>:<cause>\n", argv[i]);
-        exit(1);
-      }
-    } else if (!strcmp(argv[i], "--reset-vector")) {
-      if (i + 1 < argc) opt_reset_vector = strtol(argv[++i], NULL, 0);
     } else if (!strcmp(argv[i], "--warp")) {
       opt_warp = 1;
     } else if (!strcmp(argv[i], "--run-ms")) {
       if (i + 1 < argc) opt_run_ms = strtod(argv[++i], NULL);
-    } else if (!strcmp(argv[i], "--dump-eeprom")) {
-      if (i + 1 < argc) opt_dump_eeprom = argv[++i];
     } else if (!strcmp(argv[i], "--soft-uart") || !strncmp(argv[i], "--pin-", 6) || !strcmp(argv[i], "--adc") ||
                !strcmp(argv[i], "--vcc")) {
       const char *name = argv[i];
       const char *value = i + 1 < argc ? argv[++i] : "";
+      need_support(name);
       int r = !strcmp(name, "--soft-uart")  ? stimulus_soft_uart_arg(value)
               : !strcmp(name, "--pin-set")  ? stimulus_pin_set_arg(value)
               : !strcmp(name, "--pin-wave") ? stimulus_pin_wave_arg(value)
@@ -309,184 +224,41 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "ERROR: %s '%s' is not understood\n", name, value);
         exit(1);
       }
-    }
-  }
-
-  /* ── Load firmware ───────────────────────────────────────── */
-  int is_hex = (strstr(filename, ".hex") != NULL);
-  elf_firmware_t f = {0};
-  uint8_t *hex_data = NULL;
-  uint32_t hex_size = 0, hex_base = 0;
-
-  if (is_hex) {
-    hex_data = read_ihex_file(filename, &hex_size, &hex_base);
-    if (!hex_data) {
-      fprintf(stderr, "Cannot load HEX %s\n", filename);
-      exit(1);
-    }
-    printf("Loaded HEX: %u bytes at 0x%04x\n", hex_size, hex_base);
-  } else {
-    if (elf_read_firmware(filename, &f) < 0) {
-      fprintf(stderr, "Cannot load ELF %s\n", filename);
-      exit(1);
-    }
-    if (f.mmcu[0]) mmcu = f.mmcu;
-    if (f.frequency) freq = f.frequency;
-  }
-
-  /* ── Resolve symbol breakpoints ──────────────────────────── */
-  for (int i = 0; i < n_breakpoints; i++) {
-    if (breakpoints[i].addr != UINT32_MAX) continue;
-    if (is_hex) {
-      fprintf(stderr, "WARN: symbol breakpoints need ELF, skipping '%s'\n", breakpoints[i].label);
-      breakpoints[i] = breakpoints[--n_breakpoints];
-      i--;
     } else {
-      uint32_t a = resolve_symbol(&f, breakpoints[i].label);
-      if (a == UINT32_MAX) {
-        fprintf(stderr, "WARN: symbol '%s' not found — skipping\n", breakpoints[i].label);
-        breakpoints[i] = breakpoints[--n_breakpoints];
-        i--;
-      } else {
-        breakpoints[i].addr = a;
-        printf("[DBG] Breakpoint '%s' → PC=0x%04x\n", breakpoints[i].label, a);
+      int r = sim->arg(&i, argc, argv);
+      if (r < 0) exit(1);
+      /* an option of another target */
+      if (r == 0 && argv[i][0] == '-' && sim != &sim_backend_avr) {
+        fprintf(stderr, "ERROR: %s is not served on %s\n", argv[i], sim->name);
+        exit(1);
       }
     }
   }
+}
 
-  /* ── Create and initialise AVR ───────────────────────────── */
-  avr = avr_make_mcu_by_name(mmcu);
-  if (!avr) {
-    fprintf(stderr, "Cannot create AVR core for %s\n", mmcu);
+/* ═══════════════════════════════════════════════════════════════
+   main
+   ═══════════════════════════════════════════════════════════════ */
+
+int main(int argc, char *argv[]) {
+  setbuf(stdout, NULL);
+  setbuf(stderr, NULL);
+
+  if (argc < 2) {
+    usage(argv[0]);
     exit(1);
   }
-  avr_init(avr);
-  avr->frequency = freq;
-  fix_interrupt_flags(avr);
 
-  if (is_hex) {
-    memcpy(avr->flash + hex_base, hex_data, hex_size);
-    free(hex_data);
-    avr->pc = hex_base;
-    avr->codeend = hex_base + hex_size;
-  } else {
-    load_firmware_whole(avr, &f);
-    if (avr->codeend == 0 || avr->codeend == avr->flashend) {
-      uint32_t old_codeend = avr->codeend;
-      avr->codeend = 0;
-      for (int i = 0; i < (int)f.symbolcount; i++) {
-        uint32_t addr = f.symbol[i]->addr;
-        uint32_t end = addr + f.symbol[i]->size;
-        if (addr < avr->flashend && end > avr->codeend && end <= avr->flashend + 1) {
-            if (strcmp(f.symbol[i]->symbol, "__stack") == 0) continue;
-            if (addr == 0 && f.symbol[i]->size == 0) continue; 
-            avr->codeend = end;
-        }
-      }
-      if (avr->codeend == 0) avr->codeend = old_codeend;
-    }
-    if (avr->codeend == 0) avr->codeend = avr->flashend;
-  }
+  sim = choose_backend(argc, argv);
+  parse_options(argc, argv);
 
-  /* ── Snapshot the app binary BEFORE bootloader overlay ─────── */
-  uint8_t *stk_app_binary = NULL;
-  size_t   stk_app_size   = 0;
-  if (opt_bootloader) {
-    stk_app_size   = (avr->codeend > 0) ? avr->codeend : (avr->flashend + 1);
-    stk_app_binary = (uint8_t *)malloc(stk_app_size);
-    if (!stk_app_binary) { perror("malloc stk_app_binary"); exit(1); }
-    memcpy(stk_app_binary, avr->flash, stk_app_size);
-    printf("[STK] Captured app binary: %zu bytes from flash\n", stk_app_size);
-  }
-
-  /* ── Bootloader overlay ──────────────────────────────────── */
-  if (opt_bootloader) {
-    int bl_is_hex = (strstr(opt_bootloader, ".hex")  != NULL || strstr(opt_bootloader, ".ihex") != NULL);
-    uint32_t bl_size = 0, bl_base = 0;
-    uint8_t *bl_data = NULL;
-    uint32_t bl_entry = 0;
-
-    if (bl_is_hex) {
-      if (protosim_read_ihex(opt_bootloader, &bl_data, &bl_size, &bl_base) < 0 || !bl_data) {
-        fprintf(stderr, "ERROR: Cannot load bootloader HEX: %s\n", opt_bootloader);
-        exit(1);
-      }
-      if (bl_base + bl_size > avr->flashend + 1) {
-        fprintf(stderr, "ERROR: Bootloader HEX exceeds flash\n");
-        free(bl_data);
-        exit(1);
-      }
-      memcpy(avr->flash + bl_base, bl_data, bl_size);
-      free(bl_data);
-      bl_entry = bl_base;
-      printf("[BL] Loaded bootloader HEX: %u bytes at 0x%04x\n", bl_size, bl_base);
-    } else {
-      elf_firmware_t bl_fw = {0};
-      if (elf_read_firmware(opt_bootloader, &bl_fw) < 0) {
-        fprintf(stderr, "ERROR: Cannot load bootloader ELF: %s\n", opt_bootloader);
-        exit(1);
-      }
-      avr_t *tmp = avr_make_mcu_by_name(mmcu);
-      avr_init(tmp);
-      load_firmware_whole(tmp, &bl_fw);
-      /* simavr does not set the program counter when it loads a file: the
-         bootloader begins at the lowest address it occupies */
-      while (bl_entry <= tmp->flashend && tmp->flash[bl_entry] == 0xff) bl_entry++;
-      if (bl_entry > tmp->flashend) bl_entry = 0;
-      memcpy(avr->flash, tmp->flash, tmp->flashend + 1);
-      printf("[BL] Loaded bootloader ELF: %s  entry=0x%04x\n", opt_bootloader, bl_entry);
-    }
-    avr->pc = bl_entry;
-    avr->reset_pc = bl_entry; /* BOOTRST: a reset enters the bootloader again */
-    printf("[BL] Initial PC set to bootloader entry 0x%04x\n", bl_entry);
-    if ((bl_entry + bl_size) > avr->codeend) avr->codeend = bl_entry + bl_size;
-  }
-
-  /* ── Reset vector and reset cause ────────────────────────── */
-  if (opt_reset_vector >= 0) {
-    if ((uint32_t)opt_reset_vector > avr->flashend) {
-      fprintf(stderr, "ERROR: --reset-vector 0x%lx is outside flash\n", opt_reset_vector);
-      exit(1);
-    }
-    avr->reset_pc = (avr_flashaddr_t)opt_reset_vector;
-    avr->pc = avr->reset_pc;
-    printf("[RST] Reset vector 0x%04x\n", avr->reset_pc);
-  }
-  reset_setup(avr, opt_reset_cause);
-  reset_add_hook(uart0_in_rearm);
-  reset_install_signals();
+  sim->start(argv[1]);
+  sim->on_reset(uart0_in_rearm);
   signal(SIGTERM, on_stop_signal);
-  stimulus_setup(avr);
+  stimulus_setup();
+  sim->prepare();
 
-  avr->log = 1 + verbose;
-
-  if (debug_gdb) {
-    avr->gdb_port = 1234;
-    avr->state = cpu_Stopped;
-    avr_gdb_init(avr);
-    printf("GDB server listening on port 1234\n");
-  } else if (opt_warp) {
-    stimulus_warp(avr);
-    /* simavr sleeps a little each time firmware reads a UART status
-       register while nothing is pending, so that a polling loop does not
-       hog the host: firmware that sends with polled writes then runs about
-       80 times slower than real time. Under --warp nobody waits for real
-       time. */
-    for (char u = '0'; u <= '3'; u++) {
-      uint32_t flags = 0;
-      if (avr_ioctl(avr, AVR_IOCTL_UART_GET_FLAGS(u), &flags) < 0) continue;
-      flags &= ~AVR_UART_FLAG_POLL_SLEEP;
-      avr_ioctl(avr, AVR_IOCTL_UART_SET_FLAGS(u), &flags);
-    }
-  }
-
-  /* ── Build profiling tables ───────────────────────────────── */
-  if (opt_coverage || opt_profile || opt_callgraph) {
-    if (!is_hex) build_func_table(&f, avr->flashend);
-    profiling_alloc(avr->flashend);
-  }
-
-  /* ── PTY/COM UART ────────────────────────────────────────────── */
+  /* ── UART: files, or the PTY ─────────────────────────────── */
   int headless_uart = (opt_uart0_in || opt_uart0_out || opt_exit_on_uart);
   if (headless_uart) {
     printf("[UART] Headless mode enabled. Bypassing TCP/PTY.\n");
@@ -496,107 +268,42 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to open --uart0-out %s\n", opt_uart0_out);
       }
     }
-    // Setup hooks
-    uint32_t f = 0;
-    avr_ioctl(avr, AVR_IOCTL_UART_GET_FLAGS('0'), &f);
-    f &= ~AVR_UART_FLAG_STDIO;
-    avr_ioctl(avr, AVR_IOCTL_UART_SET_FLAGS('0'), &f);
-
-    avr_irq_t *tx = avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ('0'), UART_IRQ_OUTPUT);
-    if (tx) {
-      avr_irq_register_notify(tx, uart0_out_hook, NULL);
-    }
-    if (opt_uart0_in) {
-      avr_cycle_timer_register(avr, avr_hz_to_cycles(avr, 1000), uart0_in_timer, NULL);
-    }
+    sim->uart_listen(0, uart0_out_hook);
+    if (opt_uart0_in) sim->timer(sim->hz() / 1000, uart0_in_timer, NULL);
   } else {
-#ifdef _WIN32
-    uart_com_init(avr, &uart_com);
-    uart_com_connect(&uart_com, '0');
-    if (opt_wait_tcp) {
-      printf("[TCP] Waiting for client to connect to port %d...\n", uart_com.port.port);
-      while (!uart_com_is_connected(&uart_com)) {
-        Sleep(100);
-      }
-      printf("[TCP] Client connected. Starting simulation.\n");
-    }
-#else
-    uart_pty_init(avr, &uart_pty);
-    if (stimulus_has_soft_uart()) {
-      /* the same bridge, on the line of two pins */
-      avr_irq_t *from_part, *to_part, *xon, *xoff;
-      stimulus_soft_uart_irqs(&from_part, &to_part, &xon, &xoff);
-      uart_pty_connect_irqs(&uart_pty, from_part, to_part, xon, xoff, '0');
-      avr_raise_irq(xon, 1);
-    } else {
-      uart_pty_connect(&uart_pty, '0');
-    }
-    if (opt_wait_tcp) {
-      printf("[TCP] Waiting for client to connect on PTY %s...\n", uart_pty.port[0].slavename);
-      while (!uart_pty_is_connected(&uart_pty)) {
-        usleep(100000);
-      }
-      printf("[TCP] Client connected. Starting simulation.\n");
-    }
-#endif
+    sim->bridge();
   }
-
-  /* ── STK500 auto-upload ────────── */
-  if (opt_bootloader && stk_app_binary) {
-    static stk500_args_t stk_args;
-#ifdef _WIN32
-    stk500_args_init(&stk_args, stk_app_binary, stk_app_size, uart_com.port.port);
-#else
-    stk500_args_init(&stk_args, stk_app_binary, stk_app_size, 0);
-#endif
-    free(stk_app_binary);
-    stk500_start_upload_thread(&stk_args);
-    printf("[STK] Auto-upload thread started (port %d)\n", stk_args.tcp_port);
-  }
+  sim->launch();
 
   /* ══════════════════════════════════════════════════════════
      Main simulation loop
      ══════════════════════════════════════════════════════════ */
   long steps = 0;
-  uint64_t last_trace_cyc = 0;
   uint64_t asleep_cycles = 0;
-  uint64_t run_cycles = (uint64_t)(opt_run_ms * freq / 1000.0);
+  uint64_t run_cycles = (uint64_t)(opt_run_ms * sim->hz() / 1000.0);
 
   while (1) {
-    uint32_t pre_pc = avr->pc;
-    uint64_t pre_cycle = avr->cycle;
+    sim_cycles_t asleep = 0;
+    int state = sim->step(steps, &asleep);
+    asleep_cycles += asleep;
 
-    int state = avr_run(avr);
-
-    /* a sleeping part moves straight to its next event */
-    if (state == cpu_Sleeping && avr->cycle > pre_cycle) asleep_cycles += avr->cycle - pre_cycle;
-
-    if (opt_coverage || opt_profile || opt_callgraph)
-      profiling_step(pre_pc, pre_cycle, avr->pc, avr->cycle);
-
-    if (state == cpu_Done || state == cpu_Crashed) {
-      printf("[DBG] CPU %s at PC=0x%04x after %ld steps\n", state == cpu_Done ? "DONE" : "CRASHED", avr->pc, steps);
-      break;
-    }
+    if (state == SIM_DONE || state == SIM_CRASHED) break;
 
     steps++;
-
-    reset_after_step(avr);
 
     if (force_exit_success) {
       printf("[DBG] SUCCESS: Match '--exit-on-uart %s' found. Exiting correctly.\n", opt_exit_on_uart);
       break;
     }
 
-    if (stop_requested || (run_cycles && reset_total_cycles(avr) >= run_cycles)) {
-      printf("[DBG] stopped at %.3f ms\n", (double)reset_total_cycles(avr) * 1000.0 / freq);
+    if (stop_requested || (run_cycles && sim->now() >= run_cycles)) {
+      printf("[DBG] stopped at %.3f ms\n", sim_now_ms());
       break;
     }
 
     if (opt_max_steps && steps >= opt_max_steps) {
       printf("[DBG] MAX-STEPS (%ld) reached — stopping.\n", opt_max_steps);
-      if (opt_dump_regs) dump_registers(avr);
-      dump_watches(avr);
+      sim->at_max_steps();
       if (opt_exit_on_uart) {
         fprintf(stderr, "[ERR] --exit-on-uart condition not met within max-steps.\n");
         exit(1);
@@ -604,68 +311,19 @@ int main(int argc, char *argv[]) {
       break;
     }
 
-    if (opt_single_step) {
-      printf("[DBG] STEP  PC=0x%04x  cycle=%" PRIu64 "\n", avr->pc, avr->cycle);
-      dump_watches(avr);
-    }
-
-    if (opt_trace_every && (avr->cycle - last_trace_cyc) >= (uint64_t)opt_trace_every) {
-      last_trace_cyc = avr->cycle;
-      printf("[DBG] TRACE PC=0x%04x  cycle=%" PRIu64 "\n", avr->pc, avr->cycle);
-      if (opt_dump_regs) dump_registers(avr);
-      dump_watches(avr);
-    }
-
-    for (int i = 0; i < n_breakpoints; i++) {
-      if (avr->pc == breakpoints[i].addr) {
-        breakpoints[i].hit_count++;
-        on_breakpoint_hit(avr, breakpoints[i].label);
-      }
-    }
+    sim->inspect();
   }
 
-  /* ── Profiling reports ───────────────────────────────────── */
-  if (opt_coverage || opt_profile || opt_callgraph) {
-    finalize_call_stack(avr->cycle);
-    FILE *pout = stdout;
-    if (opt_profile_out) pout = fopen(opt_profile_out, "w");
-
-    if (opt_coverage) report_coverage(pout, avr->cycle, freq);
-    if (opt_profile) report_profile(pout, avr->cycle, freq);
-    if (opt_callgraph) report_callgraph(pout, avr->cycle, freq);
-
-    if (pout && pout != stdout) fclose(pout);
-  }
-
-  if (opt_dump_eeprom) {
-    unsigned at = 0, len = 16;
-    sscanf(opt_dump_eeprom, "%i:%i", (int *)&at, (int *)&len);
-    avr_eeprom_desc_t d = {.ee = NULL, .offset = (uint16_t)at, .size = len};
-    if (avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &d) >= 0 && d.ee) {
-      printf("[EEPROM] 0x%04x:", at);
-      for (unsigned i = 0; i < len; i++) printf(" %02x", d.ee[i]);
-      printf("\n");
-    } else {
-      printf("[EEPROM] cannot read %u bytes at 0x%04x\n", len, at);
-    }
-  }
+  sim->report();
 
   if (asleep_cycles) {
-    uint64_t total = reset_total_cycles(avr);
+    uint64_t total = sim->now();
     printf("[SLEEP] asleep %.2f%% of %.3f ms, awake %.3f ms\n", 100.0 * (double)asleep_cycles / (double)total,
-           (double)total * 1000.0 / freq, (double)(total - asleep_cycles) * 1000.0 / freq);
+           (double)total * 1000.0 / sim->hz(), (double)(total - asleep_cycles) * 1000.0 / sim->hz());
   }
 
   if (uart0_out_file) fclose(uart0_out_file);
-  
-  // Clean up sockets/PTY if used
-  if (!headless_uart) {
-#ifdef _WIN32
-    uart_com_stop(&uart_com);
-#else
-    uart_pty_stop(&uart_pty);
-#endif
-  }
+  sim->stop(headless_uart);
 
-  return force_exit_success ? 0 : 0;
+  return 0;
 }
