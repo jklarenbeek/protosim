@@ -1,7 +1,7 @@
 {
   "name": "protosim",
   "version": "1.0.4",
-  "description": "AVR Simulator with PTY Support",
+  "description": "AVR, RP2040 and RP2350 simulator with PTY support (simavr and Bramble)",
   "scripts": {
     "setup": "./scripts/setup-simavr.sh && ./scripts/setup-bramble.sh && ./scripts/setup-protoduino.sh",
     "build": "make",

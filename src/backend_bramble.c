@@ -272,24 +272,99 @@ static int bramble_analog(int channel, uint32_t mv) {
 static void (*listeners[2])(uint8_t byte);
 static int pty_uart = -1;
 
-/* Bramble's UART write, renamed when uart.c is built for protosim */
+/* Bramble's UART functions, renamed when uart.c is built for protosim */
 void bramble_uart_write32_hw(int uart_num, uint32_t offset, uint32_t val);
+uint32_t bramble_uart_read32_hw(int uart_num, uint32_t offset);
 
-/* every write to a UART register passes here: a byte sent goes to the
-   files or the PTY, not to the standard output of protosim */
+/* a bit time at the programmed baud rate: the divisor is IBRD + FBRD/64 of
+   clk_peri/16 (125 MHz) */
+static sim_cycles_t uart_bit_cycles(const uart_state_t *u) {
+  uint32_t div64 = (u->ibrd << 6) | (u->fbrd & 0x3F);
+  return div64 ? (sim_cycles_t)div64 * 16 / 64 * bramble_hz() / 125000000u : 13020;
+}
+
+/* The transmit FIFO of a PL011, 32 bytes, sent one frame (10 bits) after
+   the other at the baud rate. Bramble sends a byte the moment it is
+   written, so that its FIFO was always empty: the full flag never came,
+   and a program that refills the FIFO in its transmit interrupt never had
+   to (BR21). Here a byte leaves when its frame is over; TXFF, TXFE and BUSY
+   follow, and the transmit interrupt is raised when the FIFO drains to its
+   trigger level. For the UARTs whose bytes go to a file or the PTY. */
+#define TX_FIFO 32
+static struct {
+  uint8_t byte[TX_FIFO];
+  int head, count;
+  sim_cycles_t next; /* when the frame on the line is over */
+} tx_fifo[2];
+
+static int tx_modelled(int n) { return n >= 0 && n < 2 && (listeners[n] || pty_uart == n); }
+
+/* the transmit interrupt holds while the FIFO is at or below its level */
+static int tx_level(const uart_state_t *u) {
+  static const int level[8] = {4, 8, 16, 24, 28, 16, 16, 16};
+  return level[u->ifls & 7];
+}
+
+static void tx_update_irq(int n) {
+  uart_state_t *u = &uart_state[n];
+  if (tx_fifo[n].count <= tx_level(u)) {
+    u->ris |= UART_INT_TX;
+    if (u->imsc & UART_INT_TX) nvic_signal_irq(n == 0 ? IRQ_UART0_IRQ : IRQ_UART1_IRQ);
+  } else {
+    u->ris &= ~UART_INT_TX;
+  }
+}
+
+static void tx_send(int n) {
+  uint8_t b = tx_fifo[n].byte[tx_fifo[n].head];
+  tx_fifo[n].head = (tx_fifo[n].head + 1) % TX_FIFO;
+  tx_fifo[n].count--;
+  if (listeners[n]) listeners[n](b);
+  if (pty_uart == n) pty_line_write(b);
+}
+
+static void uart_transmit(void) {
+  for (int n = 0; n < 2; n++) {
+    if (!tx_fifo[n].count) continue;
+    sim_cycles_t now = bramble_now();
+    if (now < tx_fifo[n].next) continue;
+    tx_send(n);
+    tx_fifo[n].next = now + 10 * uart_bit_cycles(&uart_state[n]);
+    tx_update_irq(n);
+  }
+}
+
+/* every write to a UART register passes here */
 void uart_write32(int uart_num, uint32_t offset, uint32_t val) {
-  if (offset == UART_DR && uart_num >= 0 && uart_num < 2 && (uart_state[uart_num].cr & UART_CR_TXE)) {
-    if (listeners[uart_num] || pty_uart == uart_num) {
-      if (listeners[uart_num]) listeners[uart_num]((uint8_t)val);
-      if (pty_uart == uart_num) pty_line_write((uint8_t)val);
-      int quiet = usb_cdc_stdout_enabled;
-      usb_cdc_stdout_enabled = 1; /* Bramble prints only without it */
-      bramble_uart_write32_hw(uart_num, offset, val);
-      usb_cdc_stdout_enabled = quiet;
-      return;
+  if (!tx_modelled(uart_num)) {
+    bramble_uart_write32_hw(uart_num, offset, val);
+    return;
+  }
+  if (offset == UART_DR) {
+    /* a byte for the line, into the FIFO: what does not fit is lost */
+    if ((uart_state[uart_num].cr & UART_CR_TXE) && tx_fifo[uart_num].count < TX_FIFO) {
+      if (!tx_fifo[uart_num].count) tx_fifo[uart_num].next = bramble_now() + 10 * uart_bit_cycles(&uart_state[uart_num]);
+      tx_fifo[uart_num].byte[(tx_fifo[uart_num].head + tx_fifo[uart_num].count) % TX_FIFO] = (uint8_t)val;
+      tx_fifo[uart_num].count++;
     }
+    tx_update_irq(uart_num);
+    return;
   }
   bramble_uart_write32_hw(uart_num, offset, val);
+  /* Bramble holds the transmit interrupt up all the time */
+  tx_update_irq(uart_num);
+}
+
+uint32_t uart_read32(int uart_num, uint32_t offset) {
+  uint32_t v = bramble_uart_read32_hw(uart_num, offset);
+  if (!tx_modelled(uart_num)) return v;
+  if (offset == UART_FR) {
+    v &= ~(UART_FR_TXFE | UART_FR_TXFF | UART_FR_BUSY);
+    if (!tx_fifo[uart_num].count) v |= UART_FR_TXFE;
+    else v |= UART_FR_BUSY;
+    if (tx_fifo[uart_num].count == TX_FIFO) v |= UART_FR_TXFF;
+  }
+  return v;
 }
 
 /* Bramble's spinlock release, renamed when cpu.c is built for protosim. It
@@ -361,9 +436,7 @@ static void uart_receive_timeouts(void) {
       continue;
     }
     if (u->ris & UART_INT_RT) continue;
-    /* a bit time: the divisor is IBRD + FBRD/64 of clk_peri/16 (125 MHz) */
-    uint32_t div64 = (u->ibrd << 6) | (u->fbrd & 0x3F);
-    sim_cycles_t bit = div64 ? (sim_cycles_t)div64 * 16 / 64 * bramble_hz() / 125000000u : 13020;
+    sim_cycles_t bit = uart_bit_cycles(u);
     if (now - rx_seen[n].since >= 32 * bit) {
       u->ris |= UART_INT_RT;
       if (u->imsc & UART_INT_RT) nvic_signal_irq(n == 0 ? IRQ_UART0_IRQ : IRQ_UART1_IRQ);
@@ -670,6 +743,12 @@ static sim_cycles_t quiet_cycles(void) {
     if (pio_state[b].ctrl & 0xF) return 0;
   if (rtc_state.inte || usb_state.dpram_touched || usb_state.sie_ctrl_written) return 0;
   if (pty_in_len) return 0;
+  /* a frame on the line */
+  for (int n = 0; n < 2; n++)
+    if (tx_fifo[n].count) {
+      if (tx_fifo[n].next <= now) return 0;
+      if (tx_fifo[n].next - now < limit) limit = tx_fifo[n].next - now;
+    }
   /* bytes waiting for their receive timeout */
   for (int n = 0; n < 2; n++)
     if (uart_state[n].rx_count && !(uart_state[n].ris & UART_INT_RT)) return 0;
@@ -728,6 +807,7 @@ static void reboot(void) {
   watchdog_reboot_pending = 0;
   clocks_state.wdog_ctrl &= ~(1u << 31);
   reset_runtime_peripherals(1);
+  memset(tx_fifo, 0, sizeof(tx_fifo)); /* the UARTs are reset too */
   dual_core_init();
   cpu_reset_core(CORE0);
   core1_in_bootrom();
@@ -761,6 +841,7 @@ static int bramble_step(long steps, sim_cycles_t *asleep) {
 
   if ((steps & 0x3FF) == 0 && pty_uart >= 0) poll_pty();
   if ((steps & 0x3F) == 0) uart_receive_timeouts();
+  if (tx_fifo[0].count | tx_fifo[1].count) uart_transmit();
   if (watched_mask) check_watches();
   run_timers();
 

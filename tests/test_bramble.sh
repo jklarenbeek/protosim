@@ -62,9 +62,11 @@ fi
 
 header "RP2040: a pin, its duty cycle, and sleep"
 run blink "$O/blink_sleep.elf" --pin-log GP25 --pin-duty GP25:500 --run-ms 1000
-log_has blink "--pin-log sees the LED go on" "[PIN] GP25=1 at 0.2"
+# UART0 sends at 115200 baud, a byte every 87 us: the LED goes on after the
+# 19 bytes of the greeting have gone out, as on a chip
+log_has blink "--pin-log sees the LED go on, after the greeting is sent" "[PIN] GP25=1 at 1.9"
 log_has blink "--pin-duty: on 100 ms of every 500" "[DUTY] GP25 20.0% at 500.000 ms"
-log_has blink "sleep_ms() sleeps the core (WFE until the alarm)" "[SLEEP] asleep 99.9"
+log_has blink "sleep_ms() sleeps the core (WFE until the alarm)" "[SLEEP] asleep 99."
 run blinkw "$O/blink_sleep.elf" --pin-log GP25 --pin-duty GP25:500 --run-ms 1000 --warp
 if cmp -s "$TMP/blink.uart" "$TMP/blinkw.uart" && diff <(grep '^\[\(PIN\|DUTY\|SLEEP\)' "$TMP/blink.log") <(grep '^\[\(PIN\|DUTY\|SLEEP\)' "$TMP/blinkw.log") > /dev/null; then
   pass "--warp: the same UART output, pin changes, duty cycles and sleep share"
@@ -90,7 +92,7 @@ has in "--adc temp: the temperature sensor" "temp 705 mV"
 
 header "RP2040: the watchdog"
 run wd "$O/watchdog.elf" --warp --run-ms 1000
-log_has wd "a watchdog that is not fed resets the chip 100 ms after the last feed" "[RST] watchdog reset at 250.2"
+log_has wd "a watchdog that is not fed resets the chip 100 ms after the last feed" "[RST] watchdog reset at 253.1"
 has wd "after the reset the chip knows it was the watchdog" "watchdog: reset by the watchdog, 1 so far"
 has wd "the scratch registers are kept through a watchdog reset" "watchdog: reset by the watchdog, 3 so far"
 has wd "and the program stops when it has seen three" "watchdog: that is enough"

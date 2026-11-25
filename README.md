@@ -459,13 +459,14 @@ Use trace to find *when* a variable changes, then switch to `-b` breakpoints to 
 ```bash
 PICO_SDK_PATH=~/pico-sdk examples/rp2/build.sh       # five examples, for both chips
 bin/protosim examples/rp2/out/rp2040/blink_sleep.elf --pin-log GP25 --pin-duty GP25:1000 --warp --run-ms 3000
-tests/test_bramble.sh                                 # 25 checks
+tests/test_bramble.sh                                 # 26 checks
 ```
 
 - Pins are named `GP0` to `GP29`; `--adc 0:<mV>` to `--adc 3:<mV>` are GP26 to
   GP29, `--adc temp:<mV>` the temperature sensor (12 bits of 3.3 V).
 - UART0 goes to `--uart0-out`, or to a pseudo terminal linked at
-  `/tmp/simavr-uart0`, as on an AVR.
+  `/tmp/simavr-uart0`, as on an AVR. A byte leaves when its frame is over, at
+  the baud rate the firmware set (87 us at 115200).
 - The clock is 125 MHz on the RP2040 and 150 MHz on the RP2350 (`-f` changes it).
 - `--warp`: while every core sleeps (WFI, WFE), time jumps to the next alarm,
   SysTick or stimulus. `sleep_ms(500)` costs no host time; without it a
@@ -482,10 +483,11 @@ loop. Where Bramble differs from a chip, the backend restores the chip's
 behaviour (renaming three functions at compile time): core 1 waits for the
 launch sequence after any reset, releasing a spinlock sends no event (so
 `sleep_ms()` sleeps), a core in WFI is woken by interrupts only, the UART
-raises its receive timeout, the watchdog counts on the Arm cores and at the RP2040's
+raises its receive timeout and sends at its baud rate through a FIFO of 32
+bytes, the watchdog counts on the Arm cores and at the RP2040's
 rate, and on the RP2350 the Cortex-M33 obeys IT blocks, fetches code it runs
 from RAM, decodes `ldr.w pc, [pc, #-0]` (the linker's veneer) and finds the
-TIMER0 interrupt registers. Each is a finding (BR01 to BR20) in the report in
+TIMER0 interrupt registers. Each is a finding (BR01 to BR21) in the report in
 `documents/`.
 
 **The RP2350 is experimental.** The Pico SDK starts and the UART works; timer

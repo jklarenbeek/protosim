@@ -1,6 +1,6 @@
 ## Prerequisites and Installation
 
-This section is designed for complete beginners who want to learn Arduino programming using the [Protoduino](https://github.com/jklarenbeek/protoduino) framework on a simulator, without needing physical hardware. We'll walk through everything step by step, assuming you have no prior experience with Linux terminals, compilers, or embedded development. By the end, you'll have a working setup to build, simulate, and interact with Arduino-like projects using protosim (which leverages simavr for AVR simulation) and Protoduino for advanced multitasking features.
+This section is designed for complete beginners who want to learn Arduino programming using the [Protoduino](https://github.com/jklarenbeek/protoduino) framework on a simulator, without needing physical hardware. We'll walk through everything step by step, assuming you have no prior experience with Linux terminals, compilers, or embedded development. By the end, you'll have a working setup to build, simulate, and interact with Arduino-like projects using protosim (which leverages simavr for AVR simulation, and Bramble for the RP2040 and RP2350; see the README) and Protoduino for advanced multitasking features.
 
 ### Why This Setup?
 

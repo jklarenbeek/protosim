@@ -76,7 +76,7 @@ src/backend_bramble.o: src/backend_bramble.c include/sim.h include/pty_line.h
 # a UART write of Bramble passes through the backend first (backend_bramble.c)
 build/bramble/uart.o: $(BRAMBLE_DIR)/src/uart.c
 	@mkdir -p $(dir $@)
-	$(CC) $(BRAMBLE_CFLAGS) -Duart_write32=bramble_uart_write32_hw -c $< -o $@
+	$(CC) $(BRAMBLE_CFLAGS) -Duart_write32=bramble_uart_write32_hw -Duart_read32=bramble_uart_read32_hw -c $< -o $@
 
 # a spinlock is released as on the chip, without an event (backend_bramble.c)
 build/bramble/cpu.o: $(BRAMBLE_DIR)/src/cpu.c
