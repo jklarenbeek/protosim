@@ -1,0 +1,20 @@
+# RP2040 and RP2350 examples for protosim, built with the Pico SDK:
+#   PICO_SDK_PATH=<sdk> ./build.sh            (both chips)
+cmake_minimum_required(VERSION 3.13)
+include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+project(protosim_rp_examples C CXX ASM)
+set(CMAKE_C_STANDARD 11)
+pico_sdk_init()
+
+function(example name)
+  add_executable(${name} ${name}/${name}.c)
+  target_link_libraries(${name} pico_stdlib ${ARGN})
+  pico_enable_stdio_uart(${name} 1)
+  pico_enable_stdio_usb(${name} 0)
+endfunction()
+
+example(uart_echo)
+example(blink_sleep)
+example(multicore pico_multicore)
+example(inputs hardware_adc)
+example(watchdog)

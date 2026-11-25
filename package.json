@@ -3,7 +3,7 @@
   "version": "1.0.4",
   "description": "AVR Simulator with PTY Support",
   "scripts": {
-    "setup": "./scripts/setup-simavr.sh && ./scripts/setup-protoduino.sh",
+    "setup": "./scripts/setup-simavr.sh && ./scripts/setup-bramble.sh && ./scripts/setup-protoduino.sh",
     "build": "make",
     "clean": "make clean",
     "deploy": "git push origin main && git push origin --tags",
