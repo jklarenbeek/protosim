@@ -5,3 +5,6 @@
 [submodule "libraries/simavr"]
 	path = libraries/simavr
 	url = https://github.com/buserror/simavr.git
+[submodule "libraries/bramble"]
+	path = libraries/bramble
+	url = https://github.com/Night-Traders-Dev/Bramble.git

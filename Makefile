@@ -26,17 +26,39 @@ else
     TARGET = bin/protosim
 endif
 
+# Bramble, for the RP2040 and RP2350: its sources without its main(), built
+# here. On by default where the submodule is checked out (not on Windows);
+# BRAMBLE=0 leaves it out.
+BRAMBLE_DIR = libraries/bramble
+ifeq ($(OS),Windows_NT)
+    BRAMBLE ?= 0
+else
+    BRAMBLE ?= $(if $(wildcard $(BRAMBLE_DIR)/src/cpu.c),1,0)
+endif
+ifeq ($(BRAMBLE),1)
+    BRAMBLE_SRCS = $(filter-out $(BRAMBLE_DIR)/src/main.c,$(wildcard $(BRAMBLE_DIR)/src/*.c $(BRAMBLE_DIR)/src/rp2350_rv/*.c $(BRAMBLE_DIR)/src/rp2350_arm/*.c))
+    BRAMBLE_OBJS = $(patsubst $(BRAMBLE_DIR)/src/%.c,build/bramble/%.o,$(BRAMBLE_SRCS))
+    BRAMBLE_INC = -I$(BRAMBLE_DIR)/include -I$(BRAMBLE_DIR)/include/rp2350_rv -I$(BRAMBLE_DIR)/include/rp2350_arm
+    BRAMBLE_CFLAGS = -O2 -std=gnu99 $(BRAMBLE_INC)
+    CFLAGS += -DPROTOSIM_BRAMBLE
+    SRCS += src/backend_bramble.c src/pty_line.c
+    LDFLAGS += -lm
+endif
+
 OBJS = $(SRCS:.c=.o)
 
 all: $(TARGET)
 
-$(TARGET): $(OBJS) check_lib
+# BRAMBLE changes what protosim.c is built with
+$(OBJS) $(BRAMBLE_OBJS): Makefile
+
+$(TARGET): $(OBJS) $(BRAMBLE_OBJS) check_lib
 ifeq ($(OS),Windows_NT)
 	if not exist bin mkdir bin
 else
 	mkdir -p bin
 endif
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(BRAMBLE_OBJS) $(LDFLAGS)
 
 ifeq ($(OS),Windows_NT)
 # Windows: use cmd.exe mkdir
@@ -46,6 +68,29 @@ endif
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# the backend sees Bramble's headers, not simavr's
+src/backend_bramble.o: src/backend_bramble.c include/sim.h include/pty_line.h
+	$(CC) -Wall -O2 -I./include $(BRAMBLE_INC) -DPROTOSIM_BRAMBLE -c $< -o $@
+
+# a UART write of Bramble passes through the backend first (backend_bramble.c)
+build/bramble/uart.o: $(BRAMBLE_DIR)/src/uart.c
+	@mkdir -p $(dir $@)
+	$(CC) $(BRAMBLE_CFLAGS) -Duart_write32=bramble_uart_write32_hw -c $< -o $@
+
+# a spinlock is released as on the chip, without an event (backend_bramble.c)
+build/bramble/cpu.o: $(BRAMBLE_DIR)/src/cpu.c
+	@mkdir -p $(dir $@)
+	$(CC) $(BRAMBLE_CFLAGS) -Dspinlock_release=bramble_spinlock_release_hw -c $< -o $@
+
+# the RP2350 TIMER0 reaches the RP2040 timer at its own offsets (backend_bramble.c)
+build/bramble/rp2350_rv/rp2350_periph.o: $(BRAMBLE_DIR)/src/rp2350_rv/rp2350_periph.c
+	@mkdir -p $(dir $@)
+	$(CC) $(BRAMBLE_CFLAGS) -Dtimer_read32=rp2350_timer0_read32 -Dtimer_write32=rp2350_timer0_write32 -c $< -o $@
+
+build/bramble/%.o: $(BRAMBLE_DIR)/src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(BRAMBLE_CFLAGS) -c $< -o $@
 
 check_lib:
 ifeq ($(OS),Windows_NT)
@@ -65,6 +110,7 @@ ifeq ($(OS),Windows_NT)
 	@echo Cleanup complete.
 else
 	rm -f src/*.o $(TARGET)
+	rm -rf build/bramble
 	rm -rf *.elf *.hex
 	@echo "Cleanup complete."
 endif
