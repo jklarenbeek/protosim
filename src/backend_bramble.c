@@ -563,8 +563,12 @@ static void m33_step_core(int c) {
   cpu_unbind_core_context(c, &ctx);
 }
 
-/* Bramble's dual_core_step(), with the core stepped by m33_step_core() */
-static void m33_dual_core_step(void) {
+/* Bramble's dual_core_step(), with two changes: the M33 is stepped by
+   m33_step_core(), and a core in WFI wakes on an interrupt only. Bramble
+   wakes it on the event register too, which only WFE waits for: once an
+   event was latched, WFI returned at once for good, and a sleeping chip was
+   awake a quarter of the time (BR19). */
+static void own_dual_core_step(void) {
   static int current = 0;
   for (int i = 0; i < num_active_cores; i++) {
     int c = current % num_active_cores;
@@ -578,13 +582,14 @@ static void m33_dual_core_step(void) {
           timing_config.cycle_accumulator -= us * timing_config.cycles_per_us;
           timer_tick(us);
           rtc_tick(us);
-          if (membus_rp2350_periph) rp2350_timer1_tick((rp2350_periph_state_t *)membus_rp2350_periph, us);
+          if (membus_rp2350_mode && membus_rp2350_periph) rp2350_timer1_tick((rp2350_periph_state_t *)membus_rp2350_periph, us);
         }
       }
       int saved_core = get_active_core();
       set_active_core(c);
       uint32_t pending = nvic_get_pending_irq();
-      int wake = (pending != 0xFFFFFFFF) || systick_states[c].pending || nvic_states[c].pendsv_pending || cores[c].event_pending;
+      int wake = (pending != 0xFFFFFFFF) || systick_states[c].pending || nvic_states[c].pendsv_pending ||
+                 (cores[c].is_wfe && cores[c].event_pending);
       set_active_core(saved_core);
       if (!wake) continue;
       cores[c].is_wfi = 0;
@@ -593,7 +598,13 @@ static void m33_dual_core_step(void) {
         cores[c].is_wfe = 0;
       }
     }
-    m33_step_core(c);
+    if (is_m33) m33_step_core(c);
+    else {
+      cpu_bind_context_t ctx;
+      if (!cpu_bind_core_context(c, &ctx)) continue;
+      cpu_step();
+      cpu_unbind_core_context(c, &ctx);
+    }
   }
 }
 
@@ -643,7 +654,12 @@ static sim_cycles_t quiet_cycles(void) {
       if (st->cvr < limit) limit = st->cvr;
     }
   }
-  /* the watchdog, when it counts */
+  /* the watchdog, when it counts: it goes down by two each microsecond on
+     an RP2040 (see bramble_step) */
+  if (clocks_state.wdog_remaining) {
+    sim_cycles_t c = (sim_cycles_t)(clocks_state.wdog_remaining / (is_m33 ? 1 : 2)) * cpus;
+    if (c < limit) limit = c;
+  }
   return limit > 2 ? limit - 1 : 0;
 }
 
@@ -684,8 +700,7 @@ static int bramble_step(long steps, sim_cycles_t *asleep) {
     if (quiet) jump(quiet);
   }
 
-  if (is_m33) m33_dual_core_step();
-  else dual_core_step();
+  own_dual_core_step();
   pio_step();
   usb_step();
 

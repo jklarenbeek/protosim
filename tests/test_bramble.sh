@@ -94,6 +94,12 @@ log_has wd "a watchdog that is not fed resets the chip 100 ms after the last fee
 has wd "after the reset the chip knows it was the watchdog" "watchdog: reset by the watchdog, 1 so far"
 has wd "the scratch registers are kept through a watchdog reset" "watchdog: reset by the watchdog, 3 so far"
 has wd "and the program stops when it has seen three" "watchdog: that is enough"
+run wdn "$O/watchdog.elf" --run-ms 1000
+if cmp -s "$TMP/wd.uart" "$TMP/wdn.uart" && [ "$(grep -c '^\[RST\]' "$TMP/wd.log")" = "$(grep -c '^\[RST\]' "$TMP/wdn.log")" ]; then
+  pass "--warp stops at the watchdog: the same resets and output without it"
+else
+  fail "the watchdog run differs with --warp"
+fi
 
 header "options a target does not serve"
 "$SIM" "$O/uart_echo.elf" --reset-at 5 --run-ms 1 > "$TMP/no1.log" 2>&1; echo $? > "$TMP/no1.rc"

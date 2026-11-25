@@ -479,10 +479,10 @@ unchanged; protosim builds its sources without its `main()` and runs its own
 loop. Where Bramble differs from a chip, the backend restores the chip's
 behaviour (renaming three functions at compile time): core 1 waits for the
 launch sequence after any reset, releasing a spinlock sends no event (so
-`sleep_ms()` sleeps), the watchdog counts on the Arm cores and at the RP2040's
+`sleep_ms()` sleeps), a core in WFI is woken by interrupts only, the watchdog counts on the Arm cores and at the RP2040's
 rate, and on the RP2350 the Cortex-M33 obeys IT blocks, fetches code it runs
 from RAM, decodes `ldr.w pc, [pc, #-0]` (the linker's veneer) and finds the
-TIMER0 interrupt registers. Each is a finding (BR01 to BR18) in the report in
+TIMER0 interrupt registers. Each is a finding (BR01 to BR19) in the report in
 `documents/`.
 
 **The RP2350 is experimental.** The Pico SDK starts and the UART works; timer
